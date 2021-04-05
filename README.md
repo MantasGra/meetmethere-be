@@ -1,7 +1,8 @@
-# Awesome Project Build with TypeORM
+# MeetMeThere Backend API
 
-Steps to run this project:
-
-1. Run `npm i` command
-2. Setup database settings inside `ormconfig.json` file
-3. Run `npm start` command
+## Database Migrations
+Migrations are run automatically when the server is started. To generate a migration run:
+```sh
+npm run typeorm migration:generate -- -n MigrationName
+```
+**Note**: Make sure to have correct configuration in [ormconfig.json](./ormconfig.json). This configuration is used to compare code with the actual state of the database.
