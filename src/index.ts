@@ -10,7 +10,6 @@ config();
 
 async function main() {
   const app = express();
-  console.log(process.env);
   const connection = await connectToDatabase();
 
   await connection.runMigrations();
