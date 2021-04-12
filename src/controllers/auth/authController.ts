@@ -69,8 +69,16 @@ export const login: RequestHandler<
 
     return res
       .status(StatusCodes.OK)
-      .cookie('accessToken', accessToken, { httpOnly: true })
-      .cookie('refreshToken', refreshToken, { httpOnly: true })
+      .cookie('accessToken', accessToken, {
+        httpOnly: true,
+        sameSite: 'none',
+        secure: true
+      })
+      .cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        sameSite: 'none',
+        secure: true
+      })
       .send();
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
@@ -106,7 +114,11 @@ export const refreshToken: RequestHandler = async (req, res) => {
 
       return res
         .status(StatusCodes.OK)
-        .cookie('accessToken', accessToken, { httpOnly: true })
+        .cookie('accessToken', accessToken, {
+          httpOnly: true,
+          sameSite: 'none',
+          secure: true
+        })
         .send();
     }
   );
