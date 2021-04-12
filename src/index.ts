@@ -17,7 +17,14 @@ async function main() {
   const connection = await connectToDatabase();
 
   await connection.runMigrations();
-  app.use(cors());
+  app.use(
+    cors({
+      origin: process.env.CROSS_ORIGINS.split(',').map((origin) =>
+        origin.trim()
+      ),
+      credentials: true
+    })
+  );
   app.use(json());
   app.use(cookieParser());
   app.use(rootRouter);
