@@ -1,4 +1,5 @@
 import { Request, RequestHandler } from 'express';
+import { ParamsDictionary, Query } from 'express-serve-static-core';
 import { getRepository, EntityNotFoundError } from 'typeorm';
 import StatusCodes from 'http-status-codes';
 import { UniqueViolationError, wrapError } from 'db-errors';
@@ -9,6 +10,8 @@ import User from '../../entity/User';
 import Token, { TokenContents } from '../../entity/Token';
 
 export interface IRegisterRequest {
+  name: string;
+  lastName: string;
   email: string;
   password: string;
 }
@@ -22,6 +25,8 @@ export const register: RequestHandler<
     const userRepository = getRepository(User);
     const newUser = req.body;
     const user = userRepository.create({
+      name: newUser.name,
+      lastName: newUser.lastName,
       email: newUser.email,
       password: newUser.password
     });
@@ -70,14 +75,14 @@ export const login: RequestHandler<
     return res
       .status(StatusCodes.OK)
       .cookie('accessToken', accessToken, {
-        httpOnly: true,
-        sameSite: 'none',
-        secure: true
+        httpOnly: true
+        // sameSite: 'none',
+        // secure: true
       })
       .cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        sameSite: 'none',
-        secure: true
+        httpOnly: true
+        // sameSite: 'none',
+        // secure: true
       })
       .send();
   } catch (error) {
@@ -135,9 +140,17 @@ export const logout: RequestHandler = async (req, res) => {
     .send();
 };
 
-export interface AuthenticatedRequest extends Request {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export interface AuthenticatedRequest<
+  P = ParamsDictionary,
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = Query,
+  Locals extends Record<string, any> = Record<string, any>
+> extends Request<P, ResBody, ReqBody, ReqQuery, Locals> {
   user: TokenContents;
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const authenticateRequest: RequestHandler = (
   req: AuthenticatedRequest,
