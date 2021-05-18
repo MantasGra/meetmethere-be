@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { notAllowedHandler, notFoundHandler } from '../utils/route-handlers';
 import authRouter from './auth';
+import meetingRouter from './meeting';
 import userRouter from './user';
 
 const router = Router();
@@ -11,6 +12,8 @@ router.get('/', (req, res) => {
 router.all('/', notAllowedHandler);
 
 router.use('/auth', authRouter);
+
+router.use('/meeting', meetingRouter);
 
 router.use('/user', userRouter);
 
