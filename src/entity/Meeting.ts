@@ -40,6 +40,12 @@ class Meeting extends BaseEntity {
   })
   status: MeetingStatus;
 
+  @Column({ nullable: true })
+  locationId: string;
+
+  @Column({ nullable: true })
+  locationString: string;
+
   @Column()
   isDatesPollActive: boolean;
 

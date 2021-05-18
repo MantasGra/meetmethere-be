@@ -4,13 +4,17 @@ import { getRepository, In } from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
 import { AuthenticatedRequest } from '../auth/authController';
 import Meeting, { MeetingStatus } from '../../entity/Meeting';
+import MeetingDatesPollEntry from '../../entity/MeetingDatesPollEntry';
 import User from '../../entity/User';
 
 const MEETINGS_PAGE_SIZE = 10;
 
-interface IUserMeetingsResponse {
-  meetings: any; //TODO: add type
-}
+type UserMeetingsResponse =
+  | {
+      meetings: Meeting[];
+      count: number;
+    }
+  | string;
 
 interface IUserMeetingsQueryParams extends Query {
   page: string;
@@ -19,30 +23,37 @@ interface IUserMeetingsQueryParams extends Query {
 export const getUserMeetings: RequestHandler = async (
   req: AuthenticatedRequest<
     Record<string, never>,
-    IUserMeetingsResponse,
+    UserMeetingsResponse,
     Record<string, never>,
     IUserMeetingsQueryParams
   >,
-  res: Response<IUserMeetingsResponse>
+  res: Response<UserMeetingsResponse>
 ) => {
   try {
     const meetingRepository = getRepository(Meeting);
     const userId = req.user.id;
-    const offset = (parseInt(req.query.page) - 1) * MEETINGS_PAGE_SIZE;
+    const page = parseInt(req.query.page);
+    if (!page) {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .send('Please provide a page parameter.');
+    }
+    const offset = (page - 1) * MEETINGS_PAGE_SIZE;
     const userParticipatedMeetings = await meetingRepository
       .createQueryBuilder('meeting')
       .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
         userId
       })
       .leftJoinAndSelect('meeting.participants', 'participant')
-      .orderBy('meeting.createDate')
+      .orderBy('meeting.startDate')
       .skip(offset)
       .take(MEETINGS_PAGE_SIZE)
       .getManyAndCount();
 
-    return res
-      .status(StatusCodes.OK)
-      .json({ meetings: userParticipatedMeetings });
+    return res.status(StatusCodes.OK).json({
+      meetings: userParticipatedMeetings[0],
+      count: userParticipatedMeetings[1]
+    });
   } catch (error) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
@@ -53,6 +64,8 @@ interface ICreateMeetingRequest {
   description: string;
   startDate: Date;
   endDate: Date;
+  locationId: string;
+  locationString: string;
   status: MeetingStatus;
   isDatesPollActive: boolean;
   canUsersAddPollEntries: boolean;
@@ -70,8 +83,11 @@ export const createMeeting: RequestHandler = async (
     endDate,
     status,
     isDatesPollActive,
+    locationId,
+    locationString,
     canUsersAddPollEntries,
-    participantIds
+    participantIds,
+    datesPollEntries
   } = req.body;
   try {
     const meetingRepository = getRepository(Meeting);
@@ -89,12 +105,26 @@ export const createMeeting: RequestHandler = async (
       startDate,
       endDate,
       status,
+      locationId,
+      locationString,
       isDatesPollActive,
       canUsersAddPollEntries,
       creator: creatorUser,
       participants: [creatorUser, ...participants]
     });
     await meetingRepository.save(newMeeting);
+    const meetingDatesPollEntryRepository = getRepository(
+      MeetingDatesPollEntry
+    );
+    if (isDatesPollActive) {
+      for (let i = 0; i < datesPollEntries.length; i++) {
+        const pollEntry = meetingDatesPollEntryRepository.create({
+          ...datesPollEntries[i],
+          meeting: newMeeting
+        });
+        meetingDatesPollEntryRepository.save(pollEntry);
+      }
+    }
     return res.status(StatusCodes.CREATED).send({ createdMeeting: newMeeting });
   } catch (error) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();

@@ -76,13 +76,17 @@ export const login: RequestHandler<
       .status(StatusCodes.OK)
       .cookie('accessToken', accessToken, {
         httpOnly: true,
-        sameSite: 'none',
-        secure: true
+        ...(process.env.ENVIRONMENT === 'PROD' && {
+          sameSite: 'none',
+          secure: true
+        })
       })
       .cookie('refreshToken', refreshToken, {
         httpOnly: true,
-        sameSite: 'none',
-        secure: true
+        ...(process.env.ENVIRONMENT === 'PROD' && {
+          sameSite: 'none',
+          secure: true
+        })
       })
       .send();
   } catch (error) {
@@ -121,8 +125,10 @@ export const refreshToken: RequestHandler = async (req, res) => {
         .status(StatusCodes.OK)
         .cookie('accessToken', accessToken, {
           httpOnly: true,
-          sameSite: 'none',
-          secure: true
+          ...(process.env.ENVIRONMENT === 'PROD' && {
+            sameSite: 'none',
+            secure: true
+          })
         })
         .send();
     }
