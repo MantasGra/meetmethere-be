@@ -141,8 +141,20 @@ export const logout: RequestHandler = async (req, res) => {
   await tokenRepository.delete({ tokenValue: refreshToken });
   return res
     .status(StatusCodes.OK)
-    .clearCookie('accessToken')
-    .clearCookie('refreshToken')
+    .clearCookie('accessToken', {
+      httpOnly: true,
+      ...(process.env.ENVIRONMENT === 'PROD' && {
+        sameSite: 'none',
+        secure: true
+      })
+    })
+    .clearCookie('refreshToken', {
+      httpOnly: true,
+      ...(process.env.ENVIRONMENT === 'PROD' && {
+        sameSite: 'none',
+        secure: true
+      })
+    })
     .send();
 };
 
