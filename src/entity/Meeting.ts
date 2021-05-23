@@ -6,6 +6,7 @@ import {
   ManyToMany,
   JoinTable
 } from 'typeorm';
+import Announcement from './Announcement';
 import BaseEntity from './base/BaseEntity';
 import MeetingDatesPollEntry from './MeetingDatesPollEntry';
 import User from './User';
@@ -64,6 +65,9 @@ class Meeting extends BaseEntity {
     (meetingDatePollEntry) => meetingDatePollEntry.meeting
   )
   meetingDatesPollEntries: MeetingDatesPollEntry[];
+
+  @OneToMany(() => Announcement, (announcement) => announcement.meeting)
+  annoucements: Announcement[];
 }
 
 export default Meeting;
