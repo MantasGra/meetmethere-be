@@ -12,7 +12,6 @@ import Expense from './Expense';
 import MeetingDatesPollEntry from './MeetingDatesPollEntry';
 import User from './User';
 
-
 export enum MeetingStatus {
   Planned,
   Postponed,
