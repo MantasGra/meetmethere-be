@@ -7,15 +7,14 @@ import Meeting from '../../entity/Meeting';
 import Expense from '../../entity/Expense';
 import User from '../../entity/User';
 
-
 interface MeetingExpenseRouteParams extends ParamsDictionary {
   id: string;
-};
+}
 
 interface EditMeetingExpenseRouteParams extends ParamsDictionary {
   expenseId: string;
   meetingId: string;
-};
+}
 
 export const getMeetingExpenses: RequestHandler = async (
   req: AuthenticatedRequest<
@@ -95,28 +94,28 @@ export const createMeetingExpense: RequestHandler = async (
       })
       .getOneOrFail();
 
-      const users = await userRepository.find({
-        where: {
-          id: In(req.body.userIds)
-        }
-      });
+    const users = await userRepository.find({
+      where: {
+        id: In(req.body.userIds)
+      }
+    });
 
-      const expense = expenseRepository.create({
-        ...req.body,
-        meeting: meeting,
-        users: users,
-        createdBy: creatorUser
-      })
+    const expense = expenseRepository.create({
+      ...req.body,
+      meeting: meeting,
+      users: users,
+      createdBy: creatorUser
+    });
 
-      await expenseRepository.save(expense);
-      return res.status(StatusCodes.CREATED).json(expense);
+    await expenseRepository.save(expense);
+    return res.status(StatusCodes.CREATED).json(expense);
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();
     }
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
-}
+};
 
 export const editMeetingExpense: RequestHandler = async (
   req: AuthenticatedRequest<
@@ -144,30 +143,30 @@ export const editMeetingExpense: RequestHandler = async (
       })
       .getOneOrFail();
 
-      const users = await userRepository.find({
-        where: {
-          id: In(req.body.userIds)
-        }
-      });
-      
-      const expense = await expenseRepository.findOne(expenseId);
+    const users = await userRepository.find({
+      where: {
+        id: In(req.body.userIds)
+      }
+    });
 
-      const result = await expenseRepository.save({
-        ...expense,
-        name: req.body.name,
-        description: req.body.description,
-        amount: req.body.amount,
-        users: users,
-        createdBy: creatorUser
-      });
-      return res.status(StatusCodes.CREATED).json(result);
+    const expense = await expenseRepository.findOne(expenseId);
+
+    const result = await expenseRepository.save({
+      ...expense,
+      name: req.body.name,
+      description: req.body.description,
+      amount: req.body.amount,
+      users: users,
+      createdBy: creatorUser
+    });
+    return res.status(StatusCodes.CREATED).json(result);
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();
     }
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
-}
+};
 
 export const deleteMeetingExpense: RequestHandler = async (
   req: AuthenticatedRequest<
@@ -196,18 +195,21 @@ export const deleteMeetingExpense: RequestHandler = async (
       })
       .leftJoinAndSelect('meeting.creator', 'creator')
       .getOneOrFail();
-      
-      const expense = await expenseRepository
+
+    const expense = await expenseRepository
       .createQueryBuilder('expense')
       .where('expense.id = :expenseId', { expenseId })
       .leftJoinAndSelect('expense.createdBy', 'createdBy')
       .getOne();
 
-      if (creatorUser.id === expense.createdBy.id && creatorUser.id === meeting.creator.id) {
-        await expenseRepository.softRemove(expense);
-        return res.status(StatusCodes.NO_CONTENT).send();
-      }
-      return res.status(StatusCodes.FORBIDDEN).send();
+    if (
+      creatorUser.id === expense.createdBy.id &&
+      creatorUser.id === meeting.creator.id
+    ) {
+      await expenseRepository.softRemove(expense);
+      return res.status(StatusCodes.NO_CONTENT).send();
+    }
+    return res.status(StatusCodes.FORBIDDEN).send();
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();
@@ -215,4 +217,4 @@ export const deleteMeetingExpense: RequestHandler = async (
     console.log(error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
-}
+};
