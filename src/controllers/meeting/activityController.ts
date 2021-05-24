@@ -1,6 +1,6 @@
 import { RequestHandler, Response } from 'express';
 import { ParamsDictionary } from 'express-serve-static-core';
-import { EntityNotFoundError, getRepository, In } from 'typeorm';
+import { EntityNotFoundError, getRepository } from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
 import { AuthenticatedRequest } from '../auth/authController';
 import Meeting from '../../entity/Meeting';
