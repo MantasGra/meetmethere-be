@@ -157,7 +157,7 @@ export const editMeetingExpense: RequestHandler = async (
     if (expense.createdBy.id !== user.id) {
       return res.status(StatusCodes.FORBIDDEN).send();
     }
-    
+
     const result = await expenseRepository.save({
       ...expense,
       name: req.body.name,
