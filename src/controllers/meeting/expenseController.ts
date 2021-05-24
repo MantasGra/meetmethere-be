@@ -82,10 +82,10 @@ export const createMeetingExpense: RequestHandler = async (
   const expenseRepository = getRepository(Expense);
   const userRepository = getRepository(User);
   const userId = req.user.id;
-  const creatorUser = await userRepository.findOne(userId);
   const meetingId = parseInt(req.params.id);
 
   try {
+    const creatorUser = await userRepository.findOne(userId);
     const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
@@ -130,7 +130,6 @@ export const editMeetingExpense: RequestHandler = async (
   const expenseRepository = getRepository(Expense);
   const userRepository = getRepository(User);
   const userId = req.user.id;
-  const creatorUser = await userRepository.findOne(userId);
   const meetingId = parseInt(req.params.meetingId);
   const expenseId = parseInt(req.params.expenseId);
 
@@ -149,15 +148,16 @@ export const editMeetingExpense: RequestHandler = async (
       }
     });
 
-    const expense = await expenseRepository.findOne(expenseId);
+    const expense = await expenseRepository.findOneOrFail(expenseId, {
+      relations: ['createdBy']
+    });
 
     const result = await expenseRepository.save({
       ...expense,
       name: req.body.name,
       description: req.body.description,
       amount: req.body.amount,
-      users: users,
-      createdBy: creatorUser
+      users: users
     });
     return res.status(StatusCodes.OK).json(result);
   } catch (error) {
@@ -181,12 +181,13 @@ export const deleteMeetingExpense: RequestHandler = async (
   const userRepository = getRepository(User);
   const meetingRepository = getRepository(Meeting);
   const userId = req.user.id;
-  const creatorUser = await userRepository.findOne(userId);
 
   const meetingId = parseInt(req.params.meetingId);
   const expenseId = parseInt(req.params.expenseId);
 
   try {
+    const creatorUser = await userRepository.findOneOrFail(userId);
+
     const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
@@ -200,7 +201,7 @@ export const deleteMeetingExpense: RequestHandler = async (
       .createQueryBuilder('expense')
       .where('expense.id = :expenseId', { expenseId })
       .leftJoinAndSelect('expense.createdBy', 'createdBy')
-      .getOne();
+      .getOneOrFail();
 
     if (
       creatorUser.id === expense.createdBy.id &&
