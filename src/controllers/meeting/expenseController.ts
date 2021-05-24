@@ -159,7 +159,7 @@ export const editMeetingExpense: RequestHandler = async (
       users: users,
       createdBy: creatorUser
     });
-    return res.status(StatusCodes.CREATED).json(result);
+    return res.status(StatusCodes.OK).json(result);
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();
