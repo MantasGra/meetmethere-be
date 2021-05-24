@@ -90,7 +90,7 @@ export const createMeetingActivity: RequestHandler = async (
 
     const activity = activityRepository.create({
       ...req.body,
-      meeting: meeting,
+      meeting: meeting
     });
 
     await activityRepository.save(activity);
@@ -141,9 +141,7 @@ export const editMeetingActivity: RequestHandler = async (
 };
 
 export const deleteMeetingActivity: RequestHandler = async (
-  req: AuthenticatedRequest<
-    EditMeetingActivityRouteParams
-  >,
+  req: AuthenticatedRequest<EditMeetingActivityRouteParams>,
   res: Response
 ) => {
   const activityRepository = getRepository(Activity);
@@ -154,7 +152,6 @@ export const deleteMeetingActivity: RequestHandler = async (
   const activityId = parseInt(req.params.activityId);
 
   try {
-
     await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
@@ -168,7 +165,6 @@ export const deleteMeetingActivity: RequestHandler = async (
 
     await activityRepository.softRemove(activity);
     return res.status(StatusCodes.NO_CONTENT).send();
-
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateRequest } from '../controllers/auth/authController';
-import { 
+import {
   createMeetingActivity,
   deleteMeetingActivity,
   editMeetingActivity,
