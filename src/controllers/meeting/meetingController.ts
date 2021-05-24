@@ -247,12 +247,11 @@ export const getMeetingAnnouncements: RequestHandler = async (
 interface IMeetingDatesPollEntryRequest {
   newMeetingDatesPollEntries: MeetingDatesPollEntry[];
   votes: IMeetingDatesPollVote[];
-};
+}
 
 interface IMeetingDatesPollVote {
   meetingDatePollEntryId: boolean;
 }
-
 
 export const updateUserMeetingDatePollEntries: RequestHandler = async (
   req: AuthenticatedRequest<
@@ -266,25 +265,31 @@ export const updateUserMeetingDatePollEntries: RequestHandler = async (
   const meetingId = parseInt(req.params.id);
   const meetingRepository = getRepository(Meeting);
   const meetingDatesPollEntryRepository = getRepository(MeetingDatesPollEntry);
-  const userMeetingDatesPollEntryRepository = getRepository(UserMeetingDatesPollEntry);
+  const userMeetingDatesPollEntryRepository = getRepository(
+    UserMeetingDatesPollEntry
+  );
   const userRepository = getRepository(User);
-  
+
   try {
     const meeting = await meetingRepository
-    .createQueryBuilder('meeting')
-    .where('meeting.id = :meetingId', { meetingId })
-    .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-      userId
-    })
-    .leftJoinAndSelect('meeting.creator', 'creator')
-    .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'meetingDatesPollEntries')
-    .getOneOrFail();
+      .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId })
+      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
+        userId
+      })
+      .leftJoinAndSelect('meeting.creator', 'creator')
+      .leftJoinAndSelect(
+        'meeting.meetingDatesPollEntries',
+        'meetingDatesPollEntries'
+      )
+      .getOneOrFail();
 
     const user = await userRepository.findOne(userId);
 
     if (
       !meeting.canUsersAddPollEntries &&
-      (req.body.newMeetingDatesPollEntries && req.body.newMeetingDatesPollEntries.length) &&
+      req.body.newMeetingDatesPollEntries &&
+      req.body.newMeetingDatesPollEntries.length &&
       meeting.creator.id !== user.id
     ) {
       return res.status(StatusCodes.FORBIDDEN).send();
@@ -307,32 +312,36 @@ export const updateUserMeetingDatePollEntries: RequestHandler = async (
         await userMeetingDatesPollEntryRepository.save(newVote);
       }
     }
-    
+
     if (pollEntryVotes) {
       for (let i = 0; i < pollEntryVotes.length; i++) {
         console.log(pollEntryVotes.length);
-        const pollEntry = await meetingDatesPollEntryRepository.findOne(Object.keys(pollEntryVotes[i])[0]);
+        const pollEntry = await meetingDatesPollEntryRepository.findOne(
+          Object.keys(pollEntryVotes[i])[0]
+        );
         if (!pollEntry) {
           return res.status(StatusCodes.BAD_REQUEST).send();
         }
         const previousVote = await userMeetingDatesPollEntryRepository
           .createQueryBuilder('votes')
-          .where('votes.meetingDatesPollEntryId = :pollEntryId', { pollEntryId: pollEntry.id })
+          .where('votes.meetingDatesPollEntryId = :pollEntryId', {
+            pollEntryId: pollEntry.id
+          })
           .andWhere('votes.userId = :userId', { userId })
           .getOne();
-          if (!previousVote && Object.values(pollEntryVotes[i])[0]) {
-            //create entry
-            const newVote = userMeetingDatesPollEntryRepository.create({
-              meetingDatesPollEntry: pollEntry,
-              user: user
-            });
-            await userMeetingDatesPollEntryRepository.save(newVote);
-            continue;
-          }
-          if (previousVote && !Object.values(pollEntryVotes[i])[0]) {
-            //delete entry
-            await userMeetingDatesPollEntryRepository.remove(previousVote);
-          }
+        if (!previousVote && Object.values(pollEntryVotes[i])[0]) {
+          //create entry
+          const newVote = userMeetingDatesPollEntryRepository.create({
+            meetingDatesPollEntry: pollEntry,
+            user: user
+          });
+          await userMeetingDatesPollEntryRepository.save(newVote);
+          continue;
+        }
+        if (previousVote && !Object.values(pollEntryVotes[i])[0]) {
+          //delete entry
+          await userMeetingDatesPollEntryRepository.remove(previousVote);
+        }
       }
     }
 
@@ -342,8 +351,7 @@ export const updateUserMeetingDatePollEntries: RequestHandler = async (
       .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
       .leftJoinAndSelect('votes.user', 'user')
       .orderBy('pollEntries.createDate', 'ASC')
-      .getMany()
-    ;
+      .getMany();
     res.status(StatusCodes.OK).json(updatedPolls);
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
@@ -352,4 +360,4 @@ export const updateUserMeetingDatePollEntries: RequestHandler = async (
     console.log(error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
-}
+};

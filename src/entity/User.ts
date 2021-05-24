@@ -62,7 +62,10 @@ class User extends BaseEntity {
   @OneToMany(() => Expense, 'createdBy')
   createdExpenses: Expense[];
 
-  @OneToMany(() => UserMeetingDatesPollEntry, (userMeetingDatesPollEntry) => userMeetingDatesPollEntry.user)
+  @OneToMany(
+    () => UserMeetingDatesPollEntry,
+    (userMeetingDatesPollEntry) => userMeetingDatesPollEntry.user
+  )
   userMeetingDatesPollEntries: UserMeetingDatesPollEntry[];
 }
 

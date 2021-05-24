@@ -18,7 +18,7 @@ const router = Router();
 
 router.get('/', authenticateRequest, getUserMeetings);
 router.post('/', authenticateRequest, createMeeting);
-router.post('/:id/vote', authenticateRequest, updateUserMeetingDatePollEntries)
+router.post('/:id/vote', authenticateRequest, updateUserMeetingDatePollEntries);
 router.all('/', notAllowedHandler);
 
 router.get('/:id', authenticateRequest, getMeeting);
