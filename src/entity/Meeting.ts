@@ -6,6 +6,7 @@ import {
   ManyToMany,
   JoinTable
 } from 'typeorm';
+import Activity from './Activity';
 import Announcement from './Announcement';
 import BaseEntity from './base/BaseEntity';
 import Expense from './Expense';
@@ -72,6 +73,9 @@ class Meeting extends BaseEntity {
 
   @OneToMany(() => Expense, (expense) => expense.meeting, { cascade: true })
   expenses: Expense[];
+
+  @OneToMany(() => Activity, (activity) => activity.meeting, { cascade: true })
+  activities: Activity[];
 }
 
 export default Meeting;
