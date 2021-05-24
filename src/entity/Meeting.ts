@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import Announcement from './Announcement';
 import BaseEntity from './base/BaseEntity';
+import Expense from './Expense';
 import MeetingDatesPollEntry from './MeetingDatesPollEntry';
 import User from './User';
 
@@ -68,6 +69,9 @@ class Meeting extends BaseEntity {
 
   @OneToMany(() => Announcement, (announcement) => announcement.meeting)
   annoucements: Announcement[];
+
+  @OneToMany(() => Expense, (expense) => expense.meeting, { cascade: true })
+  expenses: Expense[];
 }
 
 export default Meeting;

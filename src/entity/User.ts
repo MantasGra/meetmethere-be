@@ -3,6 +3,7 @@ import BaseEntity from './base/BaseEntity';
 import Meeting from './Meeting';
 import hashPassword from '../utils/hashPassword';
 import randomEnum from '../utils/randomEnum';
+import Expense from './Expense';
 
 export enum UserColors {
   QueenBlue = '#33658A',
@@ -53,6 +54,12 @@ class User extends BaseEntity {
   hashPassword(): void {
     this.password = hashPassword(this.password);
   }
+
+  @ManyToMany(() => Expense, (expense) => expense.users)
+  expenses: Expense[];
+
+  @OneToMany(() => Expense, 'createdBy')
+  createdExpenses: Expense[];
 }
 
 export default User;
