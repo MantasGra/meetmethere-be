@@ -4,6 +4,7 @@ import Meeting from './Meeting';
 import hashPassword from '../utils/hashPassword';
 import randomEnum from '../utils/randomEnum';
 import Expense from './Expense';
+import UserMeetingDatesPollEntry from './UserMeetingDatesPollEntry';
 
 export enum UserColors {
   QueenBlue = '#33658A',
@@ -60,6 +61,9 @@ class User extends BaseEntity {
 
   @OneToMany(() => Expense, 'createdBy')
   createdExpenses: Expense[];
+
+  @OneToMany(() => UserMeetingDatesPollEntry, (userMeetingDatesPollEntry) => userMeetingDatesPollEntry.user)
+  userMeetingDatesPollEntries: UserMeetingDatesPollEntry[];
 }
 
 export default User;
