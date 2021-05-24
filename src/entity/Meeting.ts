@@ -1,14 +1,11 @@
-import {
-  Entity,
-  Column,
-  OneToMany,
-  ManyToOne,
-  ManyToMany,
-  JoinTable
-} from 'typeorm';
+import { Entity, Column, OneToMany, ManyToOne, JoinTable } from 'typeorm';
+import Activity from './Activity';
+import Announcement from './Announcement';
 import BaseEntity from './base/BaseEntity';
+import Expense from './Expense';
 import MeetingDatesPollEntry from './MeetingDatesPollEntry';
 import User from './User';
+import UserParticipationStatus from './UserParticipationStatus';
 
 export enum MeetingStatus {
   Planned,
@@ -55,15 +52,27 @@ class Meeting extends BaseEntity {
   @ManyToOne(() => User, (user) => user.createdMeetings)
   creator: User;
 
-  @ManyToMany(() => User, (user) => user.participatedMeetings)
+  @OneToMany(
+    () => UserParticipationStatus,
+    (participation) => participation.meeting
+  )
   @JoinTable()
-  participants: User[];
+  participants: UserParticipationStatus[];
 
   @OneToMany(
     () => MeetingDatesPollEntry,
     (meetingDatePollEntry) => meetingDatePollEntry.meeting
   )
   meetingDatesPollEntries: MeetingDatesPollEntry[];
+
+  @OneToMany(() => Announcement, (announcement) => announcement.meeting)
+  annoucements: Announcement[];
+
+  @OneToMany(() => Expense, (expense) => expense.meeting, { cascade: true })
+  expenses: Expense[];
+
+  @OneToMany(() => Activity, (activity) => activity.meeting, { cascade: true })
+  activities: Activity[];
 }
 
 export default Meeting;

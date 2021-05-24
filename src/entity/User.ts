@@ -3,6 +3,9 @@ import BaseEntity from './base/BaseEntity';
 import Meeting from './Meeting';
 import hashPassword from '../utils/hashPassword';
 import randomEnum from '../utils/randomEnum';
+import Expense from './Expense';
+import UserMeetingDatesPollEntry from './UserMeetingDatesPollEntry';
+import UserParticipationStatus from './UserParticipationStatus';
 
 export enum UserColors {
   QueenBlue = '#33658A',
@@ -38,8 +41,11 @@ class User extends BaseEntity {
   })
   color: UserColors;
 
-  @ManyToMany(() => Meeting, (meeting) => meeting.participants)
-  participatedMeetings: Meeting[];
+  @OneToMany(
+    () => UserParticipationStatus,
+    (participation) => participation.participant
+  )
+  participatedMeetings: UserParticipationStatus[];
 
   @OneToMany(() => Meeting, (meeting) => meeting.creator)
   createdMeetings: Meeting[];
@@ -53,6 +59,18 @@ class User extends BaseEntity {
   hashPassword(): void {
     this.password = hashPassword(this.password);
   }
+
+  @ManyToMany(() => Expense, (expense) => expense.users)
+  expenses: Expense[];
+
+  @OneToMany(() => Expense, 'createdBy')
+  createdExpenses: Expense[];
+
+  @OneToMany(
+    () => UserMeetingDatesPollEntry,
+    (userMeetingDatesPollEntry) => userMeetingDatesPollEntry.user
+  )
+  userMeetingDatesPollEntries: UserMeetingDatesPollEntry[];
 }
 
 export default User;
