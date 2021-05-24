@@ -6,10 +6,8 @@ import { AuthenticatedRequest } from '../auth/authController';
 import Meeting, { MeetingStatus } from '../../entity/Meeting';
 import MeetingDatesPollEntry from '../../entity/MeetingDatesPollEntry';
 import User from '../../entity/User';
-import Announcement from '../../entity/Announcement';
 
 const MEETINGS_PAGE_SIZE = 10;
-const ANNOUNCEMENTS_PAGE_SIZE = 5;
 
 type UserMeetingsResponse =
   | {
@@ -47,6 +45,7 @@ export const getUserMeetings: RequestHandler = async (
         userId
       })
       .leftJoinAndSelect('meeting.participants', 'participant')
+      .orderBy('meeting.startDate', 'ASC')
       .skip(offset)
       .take(MEETINGS_PAGE_SIZE)
       .getManyAndCount();
@@ -169,68 +168,6 @@ export const createMeeting: RequestHandler = async (
     }
     return res.status(StatusCodes.CREATED).send({ createdMeeting: newMeeting });
   } catch (error) {
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
-
-interface IMeetingAnnouncementsQueryParams extends Query {
-  page: string;
-}
-
-interface IMeetingAnnouncementGetParams extends ParamsDictionary {
-  id: string;
-}
-
-type MeetingAnnouncementsResponse =
-  | {
-      announcements: Announcement[];
-      count: number;
-    }
-  | string;
-
-export const getMeetingAnnouncements: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingAnnouncementGetParams,
-    MeetingAnnouncementsResponse,
-    Record<string, never>,
-    IMeetingAnnouncementsQueryParams
-  >,
-  res: Response<MeetingAnnouncementsResponse>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const announcementsRepository = getRepository(Announcement);
-    const userId = req.user.id;
-    const meetingId = parseInt(req.params.id);
-    const page = parseInt(req.query.page);
-    if (!meetingId || !page) {
-      return res.status(StatusCodes.BAD_REQUEST).send();
-    }
-    await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
-      .getOneOrFail();
-
-    const offset = (page - 1) * ANNOUNCEMENTS_PAGE_SIZE;
-
-    const announcements = await announcementsRepository
-      .createQueryBuilder('announcement')
-      .where('announcement.meetingId = :meetingId', { meetingId })
-      .skip(offset)
-      .take(ANNOUNCEMENTS_PAGE_SIZE)
-      .getManyAndCount();
-
-    return res.status(StatusCodes.OK).json({
-      announcements: announcements[0],
-      count: announcements[1]
-    });
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };

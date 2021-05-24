@@ -13,6 +13,10 @@ import {
   getMeetingExpenses
 } from '../controllers/meeting/expenseController';
 import {
+  createMeetingAnnouncement,
+  getMeetingAnnouncements
+} from '../controllers/meeting/announcementController';
+import {
   createMeeting,
   getMeeting,
   getUserMeetings
@@ -59,5 +63,14 @@ router.delete(
   deleteMeetingActivity
 );
 router.all('/:id/activities', notAllowedHandler);
+
+// ANNOUNCEMENTS
+router.get('/:id/announcements', authenticateRequest, getMeetingAnnouncements);
+router.post(
+  '/:id/announcements',
+  authenticateRequest,
+  createMeetingAnnouncement
+);
+router.all('/:id/announcements', notAllowedHandler);
 
 export default router;
