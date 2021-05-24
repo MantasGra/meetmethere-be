@@ -142,6 +142,8 @@ export const editMeetingExpense: RequestHandler = async (
       })
       .getOneOrFail();
 
+    const user = await userRepository.findOne(userId);
+
     const users = await userRepository.find({
       where: {
         id: In(req.body.userIds)
@@ -152,6 +154,10 @@ export const editMeetingExpense: RequestHandler = async (
       relations: ['createdBy']
     });
 
+    if (expense.createdBy.id !== user.id) {
+      return res.status(StatusCodes.FORBIDDEN).send();
+    }
+    
     const result = await expenseRepository.save({
       ...expense,
       name: req.body.name,
