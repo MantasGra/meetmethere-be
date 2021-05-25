@@ -97,7 +97,7 @@ type MeetingResponse =
 
 export const getMeeting: RequestHandler = async (
   req: AuthenticatedRequest<IGetMeetingParams, MeetingResponse>,
-  res: Response<MeetingResponse>
+  res: Response<any>
 ) => {
   try {
     const meetingRepository = getRepository(Meeting);
@@ -126,7 +126,13 @@ export const getMeeting: RequestHandler = async (
       .getOneOrFail();
 
     return res.status(StatusCodes.OK).json({
-      meeting
+      meeting: {
+        ...meeting,
+        participants: meeting.participants.map((participant) => ({
+          userParticipationStatus: participant.userParticipationStatus,
+          ...participant.participant
+        }))
+      }
     });
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
