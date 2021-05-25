@@ -224,16 +224,22 @@ export const createMeeting: RequestHandler = async (
     );
     const refreshedMeeting = await meetingRepository
       .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId: newMeeting.id })
       .leftJoinAndSelect('meeting.participants', 'participants')
       .leftJoinAndSelect('participants.participant', 'participant')
       .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
       .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
       .leftJoinAndSelect('votes.user', 'votedUser')
-      .orderBy('pollEntries.createDate', 'ASC')
       .getOne();
-    return res
-      .status(StatusCodes.CREATED)
-      .send({ createdMeeting: refreshedMeeting });
+    return res.status(StatusCodes.CREATED).send({
+      createdMeeting: {
+        ...refreshedMeeting,
+        participants: refreshedMeeting.participants.map((participant) => ({
+          userParticipationStatus: participant.userParticipationStatus,
+          ...participant.participant
+        }))
+      }
+    });
   } catch (error) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
