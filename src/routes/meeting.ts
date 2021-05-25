@@ -19,6 +19,7 @@ import {
 import {
   createMeeting,
   getMeeting,
+  getUserInvitedMeetings,
   getUserMeetings,
   inviteUserToMeeting,
   setUserMeetingStatus,
@@ -29,6 +30,9 @@ import { notAllowedHandler } from '../utils/route-handlers';
 const router = Router();
 
 // MEETINGS
+router.get('/invitations', authenticateRequest, getUserInvitedMeetings);
+router.all('/invitations', notAllowedHandler);
+
 router.get('/', authenticateRequest, getUserMeetings);
 router.post('/', authenticateRequest, createMeeting);
 router.post('/:id/vote', authenticateRequest, updateUserMeetingDatePollEntries);

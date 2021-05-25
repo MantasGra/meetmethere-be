@@ -496,3 +496,33 @@ export const inviteUserToMeeting: RequestHandler = async (
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
+
+export const getUserInvitedMeetings: RequestHandler = async (
+  req: AuthenticatedRequest<
+    Record<string, any>,
+    UserParticipationStatus[],
+    Record<string, any>
+  >,
+  res: Response<UserParticipationStatus[]>
+) => {
+  const userId = req.user.id;
+  const userParticipationStatusRepository = getRepository(
+    UserParticipationStatus
+  );
+  try {
+    const invitations = await userParticipationStatusRepository
+      .createQueryBuilder('invitations')
+      .where('invitations.participantId = :userId', { userId })
+      .andWhere('invitations.userParticipationStatus = :invitedStatus', {
+        invitedStatus: ParticipationStatus.Invited
+      })
+      .leftJoinAndSelect('invitations.meeting', 'meeting')
+      .getMany();
+
+    console.log(invitations);
+
+    return res.status(StatusCodes.OK).json(invitations);
+  } catch (error) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
