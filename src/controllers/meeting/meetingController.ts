@@ -1,5 +1,5 @@
 import { RequestHandler, Response } from 'express';
-import { Query, ParamsDictionary } from 'express-serve-static-core';
+import { ParamsDictionary, Query } from 'express-serve-static-core';
 import { EntityNotFoundError, getRepository, In } from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
 import { AuthenticatedRequest } from '../auth/authController';
@@ -28,6 +28,7 @@ type UserMeetingsResponse =
 
 interface IUserMeetingsQueryParams extends Query {
   page: string;
+  typeOfMeeting: string;
 }
 
 export const getUserMeetings: RequestHandler = async (
@@ -49,16 +50,17 @@ export const getUserMeetings: RequestHandler = async (
         .send('Please provide a page parameter.');
     }
     const offset = (page - 1) * MEETINGS_PAGE_SIZE;
+    const meetingStatuses =
+      req.query.typeOfMeeting == 'planned' ? ['0', '1', '2', '3'] : ['4', '5'];
     const userParticipatedMeetings = await meetingRepository
       .createQueryBuilder('meeting')
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
-          userId
-        }
-      )
+      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
+        userId
+      })
+      .leftJoinAndSelect('meeting.participants', 'participant')
+      .where('meeting.status IN (:...meetingStatuses)', {
+        meetingStatuses: meetingStatuses
+      })
       .orderBy('meeting.startDate', 'ASC')
       .leftJoinAndSelect('meeting.participants', 'participants')
       .leftJoinAndSelect('participants.participant', 'participant')

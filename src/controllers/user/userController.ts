@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from '../auth/authController';
 import User, { UserColors } from '../../entity/User';
 
 interface IUserResponse {
+  id: number;
   name: string;
   lastName: string;
   email: string;
@@ -21,6 +22,7 @@ export const getSelf: RequestHandler = async (
     const userRepository = getRepository(User);
     const user = await userRepository.findOneOrFail(req.user.id);
     return res.status(StatusCodes.OK).json({
+      id: user.id,
       email: user.email,
       createDate: user.createDate,
       name: user.name,
