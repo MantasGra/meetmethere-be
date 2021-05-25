@@ -21,7 +21,7 @@ export enum ParticipationStatus {
 
 type UserMeetingsResponse =
   | {
-      meetings: Meeting[];
+      meetings: any[];
       count: number;
     }
   | string;
@@ -71,7 +71,13 @@ export const getUserMeetings: RequestHandler = async (
       .getManyAndCount();
 
     return res.status(StatusCodes.OK).json({
-      meetings: userParticipatedMeetings[0],
+      meetings: userParticipatedMeetings[0].map((meeting) => ({
+        ...meeting,
+        participants: meeting.participants.map((participant) => ({
+          userParticipationStatus: participant.userParticipationStatus,
+          ...participant.participant
+        }))
+      })),
       count: userParticipatedMeetings[1]
     });
   } catch (error) {
