@@ -20,6 +20,7 @@ import {
   createMeeting,
   getMeeting,
   getUserMeetings,
+  setUserMeetingStatus,
   updateUserMeetingDatePollEntries
 } from '../controllers/meeting/meetingController';
 import { notAllowedHandler } from '../utils/route-handlers';
@@ -75,4 +76,5 @@ router.post(
 );
 router.all('/:id/announcements', notAllowedHandler);
 
+router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
 export default router;

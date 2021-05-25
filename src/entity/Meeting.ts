@@ -12,6 +12,7 @@ import BaseEntity from './base/BaseEntity';
 import Expense from './Expense';
 import MeetingDatesPollEntry from './MeetingDatesPollEntry';
 import User from './User';
+import UserParticipationStatus from './UserParticipationStatus';
 
 export enum MeetingStatus {
   Planned,
@@ -58,9 +59,12 @@ class Meeting extends BaseEntity {
   @ManyToOne(() => User, (user) => user.createdMeetings)
   creator: User;
 
-  @ManyToMany(() => User, (user) => user.participatedMeetings)
+  @OneToMany(
+    () => UserParticipationStatus,
+    (participation) => participation.meeting
+  )
   @JoinTable()
-  participants: User[];
+  participants: UserParticipationStatus[];
 
   @OneToMany(
     () => MeetingDatesPollEntry,

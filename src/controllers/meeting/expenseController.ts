@@ -33,9 +33,14 @@ export const getMeetingExpenses: RequestHandler = async (
     await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
       .getOneOrFail();
 
     const expenses = await expenseRepository
@@ -89,9 +94,14 @@ export const createMeetingExpense: RequestHandler = async (
     const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
       .getOneOrFail();
 
     const users = await userRepository.find({
@@ -137,9 +147,14 @@ export const editMeetingExpense: RequestHandler = async (
     await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
       .getOneOrFail();
 
     const user = await userRepository.findOne(userId);
