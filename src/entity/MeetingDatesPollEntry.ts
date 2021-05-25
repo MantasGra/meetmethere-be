@@ -1,7 +1,15 @@
-import { Entity, Column, ManyToMany, JoinTable, ManyToOne } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToMany,
+  JoinTable,
+  ManyToOne,
+  OneToMany
+} from 'typeorm';
 import BaseEntity from './base/BaseEntity';
 import Meeting from './Meeting';
 import User from './User';
+import UserMeetingDatesPollEntry from './UserMeetingDatesPollEntry';
 
 @Entity()
 class MeetingDatesPollEntry extends BaseEntity {
@@ -14,9 +22,12 @@ class MeetingDatesPollEntry extends BaseEntity {
   @ManyToOne(() => Meeting, (meeting) => meeting.meetingDatesPollEntries)
   meeting: Meeting;
 
-  @ManyToMany(() => User)
-  @JoinTable()
-  users: User[];
+  @OneToMany(
+    () => UserMeetingDatesPollEntry,
+    (userMeetingDatesPollEntry) =>
+      userMeetingDatesPollEntry.meetingDatesPollEntry
+  )
+  userMeetingDatesPollEntries: UserMeetingDatesPollEntry[];
 }
 
 export default MeetingDatesPollEntry;

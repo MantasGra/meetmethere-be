@@ -19,7 +19,8 @@ import {
 import {
   createMeeting,
   getMeeting,
-  getUserMeetings
+  getUserMeetings,
+  updateUserMeetingDatePollEntries
 } from '../controllers/meeting/meetingController';
 import { notAllowedHandler } from '../utils/route-handlers';
 
@@ -28,6 +29,7 @@ const router = Router();
 // MEETINGS
 router.get('/', authenticateRequest, getUserMeetings);
 router.post('/', authenticateRequest, createMeeting);
+router.post('/:id/vote', authenticateRequest, updateUserMeetingDatePollEntries);
 router.all('/', notAllowedHandler);
 
 router.get('/:id', authenticateRequest, getMeeting);

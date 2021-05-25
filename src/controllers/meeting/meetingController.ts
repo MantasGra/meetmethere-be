@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from '../auth/authController';
 import Meeting, { MeetingStatus } from '../../entity/Meeting';
 import MeetingDatesPollEntry from '../../entity/MeetingDatesPollEntry';
 import User from '../../entity/User';
+import UserMeetingDatesPollEntry from '../../entity/UserMeetingDatesPollEntry';
 
 const MEETINGS_PAGE_SIZE = 10;
 
@@ -45,7 +46,10 @@ export const getUserMeetings: RequestHandler = async (
         userId
       })
       .leftJoinAndSelect('meeting.participants', 'participant')
-      .orderBy('meeting.startDate', 'ASC')
+      .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
+      .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
+      .leftJoinAndSelect('votes.user', 'votedUser')
+      .orderBy('pollEntries.startDate', 'DESC')
       .skip(offset)
       .take(MEETINGS_PAGE_SIZE)
       .getManyAndCount();
@@ -87,6 +91,10 @@ export const getMeeting: RequestHandler = async (
         userId
       })
       .leftJoinAndSelect('meeting.participants', 'participant')
+      .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
+      .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
+      .leftJoinAndSelect('votes.user', 'votedUser')
+      .orderBy('pollEntries.createDate', 'ASC')
       .getOneOrFail();
 
     return res.status(StatusCodes.OK).json({
@@ -168,6 +176,128 @@ export const createMeeting: RequestHandler = async (
     }
     return res.status(StatusCodes.CREATED).send({ createdMeeting: newMeeting });
   } catch (error) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
+
+interface IMeetingAnnouncementGetParams extends ParamsDictionary {
+  id: string;
+}
+
+interface IMeetingDatesPollEntryRequest {
+  newMeetingDatesPollEntries: MeetingDatesPollEntry[];
+  votes: IMeetingDatesPollVote[];
+}
+
+interface IMeetingDatesPollVote {
+  meetingDatePollEntryId: boolean;
+}
+
+export const updateUserMeetingDatePollEntries: RequestHandler = async (
+  req: AuthenticatedRequest<
+    IMeetingAnnouncementGetParams,
+    MeetingDatesPollEntry[],
+    IMeetingDatesPollEntryRequest
+  >,
+  res: Response<MeetingDatesPollEntry[]>
+) => {
+  const userId = req.user.id;
+  const meetingId = parseInt(req.params.id);
+  const meetingRepository = getRepository(Meeting);
+  const meetingDatesPollEntryRepository = getRepository(MeetingDatesPollEntry);
+  const userMeetingDatesPollEntryRepository = getRepository(
+    UserMeetingDatesPollEntry
+  );
+  const userRepository = getRepository(User);
+
+  try {
+    const meeting = await meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId })
+      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
+        userId
+      })
+      .leftJoinAndSelect('meeting.creator', 'creator')
+      .leftJoinAndSelect(
+        'meeting.meetingDatesPollEntries',
+        'meetingDatesPollEntries'
+      )
+      .getOneOrFail();
+
+    const user = await userRepository.findOne(userId);
+
+    if (
+      !meeting.canUsersAddPollEntries &&
+      req.body.newMeetingDatesPollEntries &&
+      req.body.newMeetingDatesPollEntries.length &&
+      meeting.creator.id !== user.id
+    ) {
+      return res.status(StatusCodes.FORBIDDEN).send();
+    }
+
+    const newPollEntries = req.body.newMeetingDatesPollEntries;
+    const pollEntryVotes = req.body.votes;
+
+    if (newPollEntries) {
+      for (let i = 0; i < newPollEntries.length; i++) {
+        const pollEntry = meetingDatesPollEntryRepository.create({
+          ...newPollEntries[i],
+          meeting: meeting
+        });
+        await meetingDatesPollEntryRepository.save(pollEntry);
+        const newVote = userMeetingDatesPollEntryRepository.create({
+          meetingDatesPollEntry: pollEntry,
+          user: user
+        });
+        await userMeetingDatesPollEntryRepository.save(newVote);
+      }
+    }
+
+    if (pollEntryVotes) {
+      for (let i = 0; i < pollEntryVotes.length; i++) {
+        console.log(pollEntryVotes.length);
+        const pollEntry = await meetingDatesPollEntryRepository.findOne(
+          Object.keys(pollEntryVotes[i])[0]
+        );
+        if (!pollEntry) {
+          return res.status(StatusCodes.BAD_REQUEST).send();
+        }
+        const previousVote = await userMeetingDatesPollEntryRepository
+          .createQueryBuilder('votes')
+          .where('votes.meetingDatesPollEntryId = :pollEntryId', {
+            pollEntryId: pollEntry.id
+          })
+          .andWhere('votes.userId = :userId', { userId })
+          .getOne();
+        if (!previousVote && Object.values(pollEntryVotes[i])[0]) {
+          //create entry
+          const newVote = userMeetingDatesPollEntryRepository.create({
+            meetingDatesPollEntry: pollEntry,
+            user: user
+          });
+          await userMeetingDatesPollEntryRepository.save(newVote);
+          continue;
+        }
+        if (previousVote && !Object.values(pollEntryVotes[i])[0]) {
+          //delete entry
+          await userMeetingDatesPollEntryRepository.remove(previousVote);
+        }
+      }
+    }
+
+    const updatedPolls = await meetingDatesPollEntryRepository
+      .createQueryBuilder('pollEntries')
+      .where('pollEntries.meetingId = :meetingId', { meetingId })
+      .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
+      .leftJoinAndSelect('votes.user', 'user')
+      .orderBy('pollEntries.createDate', 'ASC')
+      .getMany();
+    res.status(StatusCodes.OK).json(updatedPolls);
+  } catch (error) {
+    if (error instanceof EntityNotFoundError) {
+      return res.status(StatusCodes.NOT_FOUND).send();
+    }
+    console.log(error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
