@@ -10,6 +10,7 @@ import {
   createMeeting,
   getMeeting,
   getUserMeetings,
+  setUserMeetingStatus,
   updateUserMeetingDatePollEntries
 } from '../controllers/meeting/meetingController';
 import { notAllowedHandler } from '../utils/route-handlers';
@@ -38,4 +39,6 @@ router.delete(
 );
 router.all('/:id/expenses', notAllowedHandler);
 router.all('/:meetingId/expenses/:expenseId', notAllowedHandler);
+
+router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
 export default router;
