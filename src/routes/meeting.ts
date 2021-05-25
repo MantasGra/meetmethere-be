@@ -40,7 +40,6 @@ router.all('/:id', notAllowedHandler);
 router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
 router.post('/:id/invite', authenticateRequest, inviteUserToMeeting);
 
-
 // EXPENSES
 router.get('/:id/expenses', authenticateRequest, getMeetingExpenses);
 router.post('/:id/expenses', authenticateRequest, createMeetingExpense);

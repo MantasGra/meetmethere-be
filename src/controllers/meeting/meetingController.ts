@@ -438,7 +438,7 @@ export const setUserMeetingStatus: RequestHandler = async (
 };
 
 interface IInviteUserToMeetingRequest {
-  userId: string
+  userId: string;
 }
 
 export const inviteUserToMeeting: RequestHandler = async (
@@ -461,14 +461,9 @@ export const inviteUserToMeeting: RequestHandler = async (
     const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.creator',
-        'user',
-        'creatorId = :userId',
-        {
-          userId
-        }
-      )
+      .innerJoin('meeting.creator', 'user', 'creatorId = :userId', {
+        userId
+      })
       .getOneOrFail();
 
     const invitedUser = await userRepository.findOneOrFail(req.body.userId);
@@ -476,15 +471,15 @@ export const inviteUserToMeeting: RequestHandler = async (
     const previousInvitation = userParticipationStatusRepository.findOne({
       meeting: meeting,
       participant: invitedUser
-    })
+    });
 
     if (!previousInvitation) {
       const invitation = userParticipationStatusRepository.create({
         meeting: meeting,
         participant: invitedUser,
         userParticipationStatus: ParticipationStatus.Invited
-      })
-  
+      });
+
       userParticipationStatusRepository.save(invitation);
     }
 
