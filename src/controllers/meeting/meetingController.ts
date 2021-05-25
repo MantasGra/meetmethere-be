@@ -221,7 +221,7 @@ export const createMeeting: RequestHandler = async (
       }))
     );
 
-    participantStatusRepository.save([
+    await participantStatusRepository.save([
       participantStatusRepository.create({
         participant: creatorUser,
         meeting: newMeeting,
@@ -244,6 +244,7 @@ export const createMeeting: RequestHandler = async (
       .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
       .leftJoinAndSelect('votes.user', 'votedUser')
       .getOne();
+
     return res.status(StatusCodes.CREATED).send({
       createdMeeting: {
         ...refreshedMeeting,
@@ -406,7 +407,7 @@ export const setUserMeetingStatus: RequestHandler = async (
   );
   try {
     const user = await userRepository.findOne(userId);
-    await meetingRepository
+    const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
       .innerJoin(
@@ -421,9 +422,11 @@ export const setUserMeetingStatus: RequestHandler = async (
 
     const userParticipationStatus = await userParticipationStatusRepository.findOne(
       {
-        participant: user
+        participant: user,
+        meeting: meeting
       }
     );
+    console.log(userParticipationStatus);
 
     await userParticipationStatusRepository.save({
       ...userParticipationStatus,
@@ -435,6 +438,95 @@ export const setUserMeetingStatus: RequestHandler = async (
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();
     }
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
+
+interface IInviteUserToMeetingRequest {
+  userIds: number[];
+}
+
+export const inviteUserToMeeting: RequestHandler = async (
+  req: AuthenticatedRequest<
+    IMeetingAnnouncementGetParams,
+    Record<string, any>,
+    IInviteUserToMeetingRequest
+  >,
+  res: Response
+) => {
+  const userId = req.user.id;
+  const meetingId = parseInt(req.params.id);
+  const meetingRepository = getRepository(Meeting);
+  const userRepository = getRepository(User);
+  const userParticipationStatusRepository = getRepository(
+    UserParticipationStatus
+  );
+  try {
+    const user = await userRepository.findOne(userId);
+    const meeting = await meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId })
+      .innerJoin('meeting.creator', 'user', 'creatorId = :userId', {
+        userId
+      })
+      .getOneOrFail();
+
+    const invitedUsers = await userRepository.findByIds(req.body.userIds);
+
+    for (let i = 0; i < invitedUsers.length; i++) {
+      const previousInvitation = await userParticipationStatusRepository.findOne(
+        {
+          meeting: meeting,
+          participant: invitedUsers[i]
+        }
+      );
+
+      if (!previousInvitation) {
+        const invitation = userParticipationStatusRepository.create({
+          meeting: meeting,
+          participant: invitedUsers[i],
+          userParticipationStatus: ParticipationStatus.Invited
+        });
+
+        userParticipationStatusRepository.save(invitation);
+      }
+    }
+
+    return res.status(StatusCodes.OK).send();
+  } catch (error) {
+    if (error instanceof EntityNotFoundError) {
+      return res.status(StatusCodes.NOT_FOUND).send();
+    }
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
+
+export const getUserInvitedMeetings: RequestHandler = async (
+  req: AuthenticatedRequest<
+    Record<string, any>,
+    UserParticipationStatus[],
+    Record<string, any>
+  >,
+  res: Response<UserParticipationStatus[]>
+) => {
+  const userId = req.user.id;
+  const userParticipationStatusRepository = getRepository(
+    UserParticipationStatus
+  );
+  try {
+    const invitations = await userParticipationStatusRepository
+      .createQueryBuilder('invitations')
+      .where('invitations.participantId = :userId', { userId })
+      .andWhere('invitations.userParticipationStatus = :invitedStatus', {
+        invitedStatus: ParticipationStatus.Invited
+      })
+      .leftJoinAndSelect('invitations.meeting', 'meeting')
+      .getMany();
+
+    console.log(invitations);
+
+    return res.status(StatusCodes.OK).json(invitations);
+  } catch (error) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };

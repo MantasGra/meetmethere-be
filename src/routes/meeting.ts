@@ -19,7 +19,9 @@ import {
 import {
   createMeeting,
   getMeeting,
+  getUserInvitedMeetings,
   getUserMeetings,
+  inviteUserToMeeting,
   setUserMeetingStatus,
   updateUserMeetingDatePollEntries
 } from '../controllers/meeting/meetingController';
@@ -28,6 +30,9 @@ import { notAllowedHandler } from '../utils/route-handlers';
 const router = Router();
 
 // MEETINGS
+router.get('/invitations', authenticateRequest, getUserInvitedMeetings);
+router.all('/invitations', notAllowedHandler);
+
 router.get('/', authenticateRequest, getUserMeetings);
 router.post('/', authenticateRequest, createMeeting);
 router.post('/:id/vote', authenticateRequest, updateUserMeetingDatePollEntries);
@@ -35,6 +40,9 @@ router.all('/', notAllowedHandler);
 
 router.get('/:id', authenticateRequest, getMeeting);
 router.all('/:id', notAllowedHandler);
+
+router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
+router.post('/:id/invite', authenticateRequest, inviteUserToMeeting);
 
 // EXPENSES
 router.get('/:id/expenses', authenticateRequest, getMeetingExpenses);
@@ -76,5 +84,4 @@ router.post(
 );
 router.all('/:id/announcements', notAllowedHandler);
 
-router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
 export default router;
