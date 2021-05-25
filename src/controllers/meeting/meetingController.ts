@@ -219,7 +219,7 @@ export const createMeeting: RequestHandler = async (
       }))
     );
 
-    participantStatusRepository.save([
+    await participantStatusRepository.save([
       participantStatusRepository.create({
         participant: creatorUser,
         meeting: newMeeting,
@@ -242,6 +242,7 @@ export const createMeeting: RequestHandler = async (
       .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
       .leftJoinAndSelect('votes.user', 'votedUser')
       .getOne();
+
     return res.status(StatusCodes.CREATED).send({
       createdMeeting: {
         ...refreshedMeeting,
@@ -438,7 +439,7 @@ export const setUserMeetingStatus: RequestHandler = async (
 };
 
 interface IInviteUserToMeetingRequest {
-  userId: string;
+  userIds: number[];
 }
 
 export const inviteUserToMeeting: RequestHandler = async (
@@ -466,21 +467,25 @@ export const inviteUserToMeeting: RequestHandler = async (
       })
       .getOneOrFail();
 
-    const invitedUser = await userRepository.findOneOrFail(req.body.userId);
+    const invitedUsers = await userRepository.findByIds(req.body.userIds);
 
-    const previousInvitation = userParticipationStatusRepository.findOne({
-      meeting: meeting,
-      participant: invitedUser
-    });
+    for (let i = 0; i < invitedUsers.length; i++) {
+      const previousInvitation = await userParticipationStatusRepository.findOne(
+        {
+          meeting: meeting,
+          participant: invitedUsers[i]
+        }
+      );
 
-    if (!previousInvitation) {
-      const invitation = userParticipationStatusRepository.create({
-        meeting: meeting,
-        participant: invitedUser,
-        userParticipationStatus: ParticipationStatus.Invited
-      });
+      if (!previousInvitation) {
+        const invitation = userParticipationStatusRepository.create({
+          meeting: meeting,
+          participant: invitedUsers[i],
+          userParticipationStatus: ParticipationStatus.Invited
+        });
 
-      userParticipationStatusRepository.save(invitation);
+        userParticipationStatusRepository.save(invitation);
+      }
     }
 
     return res.status(StatusCodes.OK).send();
