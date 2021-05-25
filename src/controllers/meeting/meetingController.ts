@@ -46,10 +46,11 @@ export const getUserMeetings: RequestHandler = async (
         userId
       })
       .leftJoinAndSelect('meeting.participants', 'participant')
+      .orderBy('meeting.startDate', 'ASC')
       .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
       .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
       .leftJoinAndSelect('votes.user', 'votedUser')
-      .orderBy('pollEntries.startDate', 'DESC')
+      .orderBy('pollEntries.createDate', 'ASC')
       .skip(offset)
       .take(MEETINGS_PAGE_SIZE)
       .getManyAndCount();
