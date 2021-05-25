@@ -405,7 +405,7 @@ export const setUserMeetingStatus: RequestHandler = async (
   );
   try {
     const user = await userRepository.findOne(userId);
-    await meetingRepository
+    const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
       .innerJoin(
@@ -420,9 +420,11 @@ export const setUserMeetingStatus: RequestHandler = async (
 
     const userParticipationStatus = await userParticipationStatusRepository.findOne(
       {
-        participant: user
+        participant: user,
+        meeting: meeting
       }
     );
+    console.log(userParticipationStatus);
 
     await userParticipationStatusRepository.save({
       ...userParticipationStatus,
