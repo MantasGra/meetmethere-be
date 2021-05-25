@@ -20,6 +20,7 @@ import {
   createMeeting,
   getMeeting,
   getUserMeetings,
+  inviteUserToMeeting,
   setUserMeetingStatus,
   updateUserMeetingDatePollEntries
 } from '../controllers/meeting/meetingController';
@@ -35,6 +36,10 @@ router.all('/', notAllowedHandler);
 
 router.get('/:id', authenticateRequest, getMeeting);
 router.all('/:id', notAllowedHandler);
+
+router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
+router.post('/:id/invite', authenticateRequest, inviteUserToMeeting);
+
 
 // EXPENSES
 router.get('/:id/expenses', authenticateRequest, getMeetingExpenses);
@@ -76,5 +81,4 @@ router.post(
 );
 router.all('/:id/announcements', notAllowedHandler);
 
-router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
 export default router;

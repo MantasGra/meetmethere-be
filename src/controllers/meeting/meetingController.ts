@@ -436,3 +436,63 @@ export const setUserMeetingStatus: RequestHandler = async (
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
+
+interface IInviteUserToMeetingRequest {
+  userId: string
+}
+
+export const inviteUserToMeeting: RequestHandler = async (
+  req: AuthenticatedRequest<
+    IMeetingAnnouncementGetParams,
+    Record<string, any>,
+    IInviteUserToMeetingRequest
+  >,
+  res: Response
+) => {
+  const userId = req.user.id;
+  const meetingId = parseInt(req.params.id);
+  const meetingRepository = getRepository(Meeting);
+  const userRepository = getRepository(User);
+  const userParticipationStatusRepository = getRepository(
+    UserParticipationStatus
+  );
+  try {
+    const user = await userRepository.findOne(userId);
+    const meeting = await meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId })
+      .innerJoin(
+        'meeting.creator',
+        'user',
+        'creatorId = :userId',
+        {
+          userId
+        }
+      )
+      .getOneOrFail();
+
+    const invitedUser = await userRepository.findOneOrFail(req.body.userId);
+
+    const previousInvitation = userParticipationStatusRepository.findOne({
+      meeting: meeting,
+      participant: invitedUser
+    })
+
+    if (!previousInvitation) {
+      const invitation = userParticipationStatusRepository.create({
+        meeting: meeting,
+        participant: invitedUser,
+        userParticipationStatus: ParticipationStatus.Invited
+      })
+  
+      userParticipationStatusRepository.save(invitation);
+    }
+
+    return res.status(StatusCodes.OK).send();
+  } catch (error) {
+    if (error instanceof EntityNotFoundError) {
+      return res.status(StatusCodes.NOT_FOUND).send();
+    }
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
