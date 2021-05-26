@@ -54,15 +54,16 @@ export const getUserMeetings: RequestHandler = async (
       req.query.typeOfMeeting === 'planned' ? ['0', '1', '2', '3'] : ['4', '5'];
     const userParticipatedMeetings = await meetingRepository
       .createQueryBuilder('meeting')
+      .leftJoin('meeting.participants', 'participants')
+      .innerJoin('participants.participant', 'user', 'user.id = :userId', {
+        userId
+      })
       .where('meeting.status IN (:...meetingStatuses)', {
         meetingStatuses: meetingStatuses
       })
       .orderBy('meeting.startDate', 'ASC')
-      .leftJoinAndSelect('meeting.participants', 'participants')
-      .leftJoinAndSelect('participants.participant', 'participant')
-      .innerJoin('participants.participant', 'user', 'user.id = :userId', {
-        userId
-      })
+      .leftJoinAndSelect('meeting.participants', 'participants2')
+      .leftJoinAndSelect('participants2.participant', 'participant')
       .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
       .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
       .leftJoinAndSelect('votes.user', 'votedUser')
