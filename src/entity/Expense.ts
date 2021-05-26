@@ -11,7 +11,7 @@ class Expense extends BaseEntity {
   @Column()
   description: string;
 
-  @Column()
+  @Column({ type: 'double' })
   amount: number;
 
   @ManyToMany(() => User, (user) => user.expenses)
