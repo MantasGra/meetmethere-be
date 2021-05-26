@@ -57,7 +57,6 @@ export const getUserMeetings: RequestHandler = async (
       .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
         userId
       })
-      .leftJoinAndSelect('meeting.participants', 'participant')
       .where('meeting.status IN (:...meetingStatuses)', {
         meetingStatuses: meetingStatuses
       })
@@ -196,8 +195,7 @@ export const createMeeting: RequestHandler = async (
       locationString,
       isDatesPollActive,
       canUsersAddPollEntries,
-      creator: creatorUser,
-      participants: [creatorUser, ...participants]
+      creator: creatorUser
     });
     await meetingRepository.save(newMeeting);
     const meetingDatesPollEntryRepository = getRepository(
