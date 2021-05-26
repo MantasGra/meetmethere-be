@@ -51,7 +51,7 @@ export const getUserMeetings: RequestHandler = async (
     }
     const offset = (page - 1) * MEETINGS_PAGE_SIZE;
     const meetingStatuses =
-      req.query.typeOfMeeting == 'planned' ? ['0', '1', '2', '3'] : ['4', '5'];
+      req.query.typeOfMeeting === 'planned' ? ['0', '1', '2', '3'] : ['4', '5'];
     const userParticipatedMeetings = await meetingRepository
       .createQueryBuilder('meeting')
       .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
