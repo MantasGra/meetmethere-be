@@ -212,9 +212,14 @@ export const deleteMeetingExpense: RequestHandler = async (
     const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
       .leftJoinAndSelect('meeting.creator', 'creator')
       .getOneOrFail();
 
@@ -236,7 +241,6 @@ export const deleteMeetingExpense: RequestHandler = async (
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();
     }
-    console.log(error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
