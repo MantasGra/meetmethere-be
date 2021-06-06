@@ -32,9 +32,14 @@ export const getMeetingActivities: RequestHandler = async (
     await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
       .getOneOrFail();
 
     const activities = await activityRepository

@@ -1,13 +1,12 @@
 import User from '../entity/User';
 import sgMail from '@sendgrid/mail';
 import Meeting from '../entity/Meeting';
-import UserParticipationStatus from '../entity/UserParticipationStatus';
 
 export const sendMeetingInvitationMail = (
   participants: User[],
   meeting: Meeting,
   invitationLink: string
-) => {
+): void => {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
   const mail = {
@@ -19,7 +18,7 @@ export const sendMeetingInvitationMail = (
         <p>Check out your invitations page <a href="${invitationLink}">here</a></p>`
   };
   sgMail.sendMultiple(mail).then(
-    (result) => {
+    () => {
       console.log('Sent email');
     },
     (err) => {

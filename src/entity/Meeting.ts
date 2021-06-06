@@ -1,11 +1,4 @@
-import {
-  Entity,
-  Column,
-  OneToMany,
-  ManyToOne,
-  ManyToMany,
-  JoinTable
-} from 'typeorm';
+import { Entity, Column, OneToMany, ManyToOne, JoinTable } from 'typeorm';
 import Activity from './Activity';
 import Announcement from './Announcement';
 import BaseEntity from './base/BaseEntity';

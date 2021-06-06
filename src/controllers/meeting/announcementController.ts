@@ -45,9 +45,14 @@ export const getMeetingAnnouncements: RequestHandler = async (
     await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
       .getOneOrFail();
 
     const offset = (page - 1) * ANNOUNCEMENTS_PAGE_SIZE;
@@ -107,9 +112,14 @@ export const createMeetingAnnouncement: RequestHandler = async (
     const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.participants', 'user', 'user.id = :userId', {
-        userId
-      })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
       .getOneOrFail();
     const newAnnouncement = announcementsRepository.create({
       title,

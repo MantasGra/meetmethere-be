@@ -19,10 +19,12 @@ import {
 import {
   createMeeting,
   getMeeting,
+  getMeetingInvitationSelectOptions,
   getUserInvitedMeetings,
   getUserMeetings,
   inviteUserToMeeting,
   setUserMeetingStatus,
+  updateMeeting,
   updateUserMeetingDatePollEntries
 } from '../controllers/meeting/meetingController';
 import { notAllowedHandler } from '../utils/route-handlers';
@@ -39,7 +41,15 @@ router.post('/:id/vote', authenticateRequest, updateUserMeetingDatePollEntries);
 router.all('/', notAllowedHandler);
 
 router.get('/:id', authenticateRequest, getMeeting);
+router.patch('/:id', authenticateRequest, updateMeeting);
 router.all('/:id', notAllowedHandler);
+
+router.get(
+  '/:id/invitationOptions',
+  authenticateRequest,
+  getMeetingInvitationSelectOptions
+);
+router.all('/:id/invitationOptions', notAllowedHandler);
 
 router.post('/:id/status', authenticateRequest, setUserMeetingStatus);
 router.post('/:id/invite', authenticateRequest, inviteUserToMeeting);

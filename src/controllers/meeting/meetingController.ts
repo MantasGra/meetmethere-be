@@ -1,6 +1,6 @@
-import { RequestHandler, Response } from 'express';
+import { Request, RequestHandler, Response } from 'express';
 import { ParamsDictionary, Query } from 'express-serve-static-core';
-import { EntityNotFoundError, getRepository, In } from 'typeorm';
+import { EntityNotFoundError, getRepository, ILike, In, Not } from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
 import { AuthenticatedRequest } from '../auth/authController';
 import Meeting, { MeetingStatus } from '../../entity/Meeting';
@@ -9,6 +9,10 @@ import User from '../../entity/User';
 import UserMeetingDatesPollEntry from '../../entity/UserMeetingDatesPollEntry';
 import { sendMeetingInvitationMail } from '../../services/mailer';
 import UserParticipationStatus from '../../entity/UserParticipationStatus';
+import {
+  IUserSelectOptionsRequestQuery,
+  IUserSelectOptionsResponse
+} from '../user/userController';
 
 const MEETINGS_PAGE_SIZE = 10;
 
@@ -62,6 +66,7 @@ export const getUserMeetings: RequestHandler = async (
         meetingStatuses: meetingStatuses
       })
       .orderBy('meeting.startDate', 'ASC')
+      .leftJoinAndSelect('meeting.creator', 'creator')
       .leftJoinAndSelect('meeting.participants', 'participants2')
       .leftJoinAndSelect('participants2.participant', 'participant')
       .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
@@ -119,6 +124,7 @@ export const getMeeting: RequestHandler = async (
           userId
         }
       )
+      .leftJoinAndSelect('meeting.creator', 'creator')
       .leftJoinAndSelect('meeting.participants', 'participants')
       .leftJoinAndSelect('participants.participant', 'participant')
       .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
@@ -237,6 +243,7 @@ export const createMeeting: RequestHandler = async (
     const refreshedMeeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId: newMeeting.id })
+      .leftJoinAndSelect('meeting.creator', 'creator')
       .leftJoinAndSelect('meeting.participants', 'participants')
       .leftJoinAndSelect('participants.participant', 'participant')
       .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
@@ -254,6 +261,58 @@ export const createMeeting: RequestHandler = async (
       }
     });
   } catch (error) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
+
+interface IMeetingUpdateParams extends ParamsDictionary {
+  id: string;
+}
+
+interface IUpdatedFieldsRequest {
+  name: string;
+  description: string;
+  status: MeetingStatus;
+  locationId: string;
+  locationString: string;
+}
+
+interface IUpdatedFieldsResponse extends IUpdatedFieldsRequest {
+  id: number;
+}
+
+export const updateMeeting: RequestHandler = async (
+  req: AuthenticatedRequest<
+    IMeetingUpdateParams,
+    IUpdatedFieldsResponse,
+    IUpdatedFieldsRequest
+  >,
+  res: Response<IUpdatedFieldsResponse>
+) => {
+  try {
+    const meetingRepository = getRepository(Meeting);
+    const meetingId = parseInt(req.params.id);
+    const userId = req.user.id;
+    if (!meetingId) {
+      return res.status(StatusCodes.BAD_REQUEST).send();
+    }
+    await meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId })
+      .innerJoin('meeting.creator', 'creator', 'creator.id = :userId', {
+        userId
+      })
+      .getOneOrFail();
+
+    await meetingRepository.update(meetingId, req.body);
+    return res.status(StatusCodes.OK).json({
+      id: meetingId,
+      ...req.body
+    });
+  } catch (error) {
+    if (error instanceof EntityNotFoundError) {
+      return res.status(StatusCodes.NOT_FOUND).send();
+    }
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
@@ -425,7 +484,6 @@ export const setUserMeetingStatus: RequestHandler = async (
         meeting: meeting
       }
     );
-    console.log(userParticipationStatus);
 
     await userParticipationStatusRepository.save({
       ...userParticipationStatus,
@@ -461,7 +519,6 @@ export const inviteUserToMeeting: RequestHandler = async (
     UserParticipationStatus
   );
   try {
-    const user = await userRepository.findOne(userId);
     const meeting = await meetingRepository
       .createQueryBuilder('meeting')
       .where('meeting.id = :meetingId', { meetingId })
@@ -472,6 +529,7 @@ export const inviteUserToMeeting: RequestHandler = async (
 
     const invitedUsers = await userRepository.findByIds(req.body.userIds);
 
+    const newInvitations: UserParticipationStatus[] = [];
     for (let i = 0; i < invitedUsers.length; i++) {
       const previousInvitation = await userParticipationStatusRepository.findOne(
         {
@@ -487,15 +545,92 @@ export const inviteUserToMeeting: RequestHandler = async (
           userParticipationStatus: ParticipationStatus.Invited
         });
 
-        userParticipationStatusRepository.save(invitation);
+        newInvitations.push(invitation);
       }
     }
 
-    return res.status(StatusCodes.OK).send();
+    await userParticipationStatusRepository.save(newInvitations);
+
+    const invitedUserIds = newInvitations.map(
+      (newInvitation) => newInvitation.participant.id
+    );
+
+    const newlyInvitedUsers = invitedUsers.filter((user) =>
+      invitedUserIds.includes(user.id)
+    );
+
+    sendMeetingInvitationMail(
+      newlyInvitedUsers,
+      meeting,
+      process.env.APP_URL + '/invitations'
+    );
+
+    return res.status(StatusCodes.OK).send(
+      newInvitations.map((invitation) => ({
+        userParticipationStatus: invitation.userParticipationStatus,
+        ...invitation.participant
+      }))
+    );
   } catch (error) {
     if (error instanceof EntityNotFoundError) {
       return res.status(StatusCodes.NOT_FOUND).send();
     }
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
+
+interface IMeetingParams extends ParamsDictionary {
+  id: string;
+}
+
+export const getMeetingInvitationSelectOptions: RequestHandler = async (
+  req: AuthenticatedRequest<
+    IMeetingParams,
+    IUserSelectOptionsResponse,
+    Record<string, never>,
+    IUserSelectOptionsRequestQuery
+  >,
+  res: Response<IUserSelectOptionsResponse>
+) => {
+  try {
+    const meetingRepository = getRepository(Meeting);
+    const meetingId = parseInt(req.params.id);
+    const meetingParticipantIds = (
+      await meetingRepository
+        .createQueryBuilder('meeting')
+        .where('meeting.id = :meetingId', { meetingId })
+        .leftJoinAndSelect('meeting.participants', 'participants')
+        .leftJoinAndSelect('participants.participant', 'participant')
+        .getOne()
+    ).participants.map((participant) => participant.participant.id);
+    const userRepository = getRepository(User);
+    const searchWords = req.query.searchText
+      .split(' ')
+      .map((value) => `%${value}%`);
+    const userSelectOptions = await userRepository.find({
+      select: ['id', 'name', 'lastName', 'color'],
+      where: [
+        ...searchWords.map((word) => ({
+          id: Not(In(meetingParticipantIds)),
+          name: ILike(word)
+        })),
+        ...searchWords.map((word) => ({
+          id: Not(In(meetingParticipantIds)),
+          lastName: ILike(word)
+        }))
+      ],
+      order: { createDate: 'DESC' }
+    });
+    return res.status(StatusCodes.OK).json({
+      options: userSelectOptions.map((option) => ({
+        id: option.id,
+        name: option.name,
+        lastName: option.lastName,
+        color: option.color
+      }))
+    });
+  } catch (error) {
+    console.log(error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
@@ -521,8 +656,6 @@ export const getUserInvitedMeetings: RequestHandler = async (
       })
       .leftJoinAndSelect('invitations.meeting', 'meeting')
       .getMany();
-
-    console.log(invitations);
 
     return res.status(StatusCodes.OK).json(invitations);
   } catch (error) {

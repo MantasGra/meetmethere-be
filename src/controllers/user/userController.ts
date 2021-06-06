@@ -37,11 +37,11 @@ export const getSelf: RequestHandler = async (
   }
 };
 
-interface IUserSelectOptionsRequestQuery extends Query {
+export interface IUserSelectOptionsRequestQuery extends Query {
   searchText: string;
 }
 
-interface IUserSelectOptionsResponse {
+export interface IUserSelectOptionsResponse {
   options: Array<{
     id: number;
     name: string;
