@@ -47,6 +47,7 @@ export const getMeetingExpenses: RequestHandler = async (
       .createQueryBuilder('expense')
       .where('expense.meetingId = :meetingId', { meetingId })
       .leftJoinAndSelect('expense.users', 'user')
+      .leftJoinAndSelect('expense.createdBy', 'createdBy')
       .getMany();
 
     return res.status(StatusCodes.OK).json(expenses);

@@ -94,8 +94,16 @@ router.post(
   authenticateRequest,
   createMeetingAnnouncement
 );
-router.put('/:meetingId/announcements/:announcementId', authenticateRequest, editMeetingAnnouncement);
-router.delete('/:meetingId/announcements/:announcementId', authenticateRequest, deleteMeetingAnnouncement);
+router.put(
+  '/:meetingId/announcements/:announcementId',
+  authenticateRequest,
+  editMeetingAnnouncement
+);
+router.delete(
+  '/:meetingId/announcements/:announcementId',
+  authenticateRequest,
+  deleteMeetingAnnouncement
+);
 router.all('/:id/announcements', notAllowedHandler);
 
 export default router;
