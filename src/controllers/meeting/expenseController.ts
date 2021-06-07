@@ -230,7 +230,7 @@ export const deleteMeetingExpense: RequestHandler = async (
       .getOneOrFail();
 
     if (
-      creatorUser.id === expense.createdBy.id &&
+      creatorUser.id === expense.createdBy.id ||
       creatorUser.id === meeting.creator.id
     ) {
       await expenseRepository.softRemove(expense);
