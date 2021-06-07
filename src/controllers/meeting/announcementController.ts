@@ -145,7 +145,8 @@ export const createMeetingAnnouncement: RequestHandler = async (
   }
 };
 
-interface IMeetingAnnouncementEditParams extends ParamsDictionary{
+
+interface IMeetingAnnouncementEditParams extends ParamsDictionary {
   meetingId: string;
   announcementId: string;
 }
@@ -172,7 +173,9 @@ export const editMeetingAnnouncement: RequestHandler = async (
       .andWhere('meeting.creatorId = :userId', { userId })
       .getOneOrFail();
 
-    const announcement = await announcementRepository.findOneOrFail(announcementId);
+    const announcement = await announcementRepository.findOneOrFail(
+      announcementId
+    );
 
     const result = await announcementRepository.save({
       ...announcement,
@@ -185,7 +188,8 @@ export const editMeetingAnnouncement: RequestHandler = async (
     }
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
-}
+};
+
 
 export const deleteMeetingAnnouncement: RequestHandler = async (
   req: AuthenticatedRequest<IMeetingAnnouncementEditParams>,
