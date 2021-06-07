@@ -145,7 +145,6 @@ export const createMeetingAnnouncement: RequestHandler = async (
   }
 };
 
-
 interface IMeetingAnnouncementEditParams extends ParamsDictionary {
   meetingId: string;
   announcementId: string;
@@ -160,22 +159,18 @@ export const editMeetingAnnouncement: RequestHandler = async (
   >,
   res: Response<Announcement>
 ) => {
-  const meetingRepository = getRepository(Meeting);
   const announcementRepository = getRepository(Announcement);
   const userId = req.user.id;
-  const meetingId = parseInt(req.params.meetingId);
   const announcementId = parseInt(req.params.announcementId);
 
   try {
-    await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .andWhere('meeting.creatorId = :userId', { userId })
+    const announcement = await announcementRepository
+      .createQueryBuilder('announcement')
+      .where('announcement.id = :announcementId', { announcementId })
+      .innerJoinAndSelect('announcement.user', 'user', 'user.id = :userId', {
+        userId
+      })
       .getOneOrFail();
-
-    const announcement = await announcementRepository.findOneOrFail(
-      announcementId
-    );
 
     const result = await announcementRepository.save({
       ...announcement,
@@ -189,7 +184,6 @@ export const editMeetingAnnouncement: RequestHandler = async (
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
-
 
 export const deleteMeetingAnnouncement: RequestHandler = async (
   req: AuthenticatedRequest<IMeetingAnnouncementEditParams>,
