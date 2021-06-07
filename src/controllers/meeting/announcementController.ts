@@ -145,6 +145,7 @@ export const createMeetingAnnouncement: RequestHandler = async (
   }
 };
 
+
 interface IMeetingAnnouncementEditParams extends ParamsDictionary {
   meetingId: string;
   announcementId: string;
@@ -188,6 +189,7 @@ export const editMeetingAnnouncement: RequestHandler = async (
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
+
 
 export const deleteMeetingAnnouncement: RequestHandler = async (
   req: AuthenticatedRequest<IMeetingAnnouncementEditParams>,

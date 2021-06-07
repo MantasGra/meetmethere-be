@@ -94,6 +94,7 @@ router.post(
   authenticateRequest,
   createMeetingAnnouncement
 );
+
 router.put(
   '/:meetingId/announcements/:announcementId',
   authenticateRequest,
