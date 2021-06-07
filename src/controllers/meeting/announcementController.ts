@@ -144,3 +144,91 @@ export const createMeetingAnnouncement: RequestHandler = async (
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
 };
+
+interface IMeetingAnnouncementEditParams extends ParamsDictionary{
+  meetingId: string;
+  announcementId: string;
+}
+
+export const editMeetingAnnouncement: RequestHandler = async (
+  req: AuthenticatedRequest<
+    IMeetingAnnouncementEditParams,
+    Announcement,
+    ICreateAnnouncementRequest,
+    Record<string, never>
+  >,
+  res: Response<Announcement>
+) => {
+  const meetingRepository = getRepository(Meeting);
+  const announcementRepository = getRepository(Announcement);
+  const userId = req.user.id;
+  const meetingId = parseInt(req.params.meetingId);
+  const announcementId = parseInt(req.params.announcementId);
+
+  try {
+    await meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId })
+      .andWhere('meeting.creatorId = :userId', { userId })
+      .getOneOrFail();
+
+    const announcement = await announcementRepository.findOneOrFail(announcementId);
+
+    const result = await announcementRepository.save({
+      ...announcement,
+      ...req.body
+    });
+    return res.status(StatusCodes.OK).json(result);
+  } catch (error) {
+    if (error instanceof EntityNotFoundError) {
+      return res.status(StatusCodes.NOT_FOUND).send();
+    }
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+}
+
+export const deleteMeetingAnnouncement: RequestHandler = async (
+  req: AuthenticatedRequest<IMeetingAnnouncementEditParams>,
+  res: Response
+) => {
+  const announcementRepository = getRepository(Announcement);
+  const meetingRepository = getRepository(Meeting);
+  const userId = req.user.id;
+
+  const meetingId = parseInt(req.params.meetingId);
+  const announcementId = parseInt(req.params.announcementId);
+
+  try {
+    const meeting = await meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.id = :meetingId', { meetingId })
+      .innerJoin(
+        'meeting.participants',
+        'user',
+        'user.participantId = :userId',
+        {
+          userId
+        }
+      )
+      .leftJoinAndSelect('meeting.creator', 'creator')
+      .getOneOrFail();
+
+    const announcement = await announcementRepository
+      .createQueryBuilder('announcement')
+      .where('announcement.id = :announcementId', { announcementId })
+      .leftJoinAndSelect('announcement.user', 'user')
+      .getOneOrFail();
+
+    if (announcement.user.id === userId || meeting.creator.id === userId) {
+      await announcementRepository.softRemove(announcement);
+      return res.status(StatusCodes.NO_CONTENT).send();
+    }
+    return res.status(StatusCodes.FORBIDDEN).send();
+  } catch (error) {
+    if (error instanceof EntityNotFoundError) {
+      return res.status(StatusCodes.NOT_FOUND).send();
+    }
+    console.log(error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+};
