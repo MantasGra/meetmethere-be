@@ -275,6 +275,8 @@ interface IUpdatedFieldsRequest {
   status: MeetingStatus;
   locationId: string;
   locationString: string;
+  startDate: Date;
+  endDate: Date;
 }
 
 interface IUpdatedFieldsResponse extends IUpdatedFieldsRequest {
