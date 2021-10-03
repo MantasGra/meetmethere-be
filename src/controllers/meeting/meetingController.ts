@@ -480,12 +480,11 @@ export const setUserMeetingStatus: RequestHandler = async (
       )
       .getOneOrFail();
 
-    const userParticipationStatus = await userParticipationStatusRepository.findOne(
-      {
+    const userParticipationStatus =
+      await userParticipationStatusRepository.findOne({
         participant: user,
         meeting: meeting
-      }
-    );
+      });
 
     await userParticipationStatusRepository.save({
       ...userParticipationStatus,
@@ -533,12 +532,11 @@ export const inviteUserToMeeting: RequestHandler = async (
 
     const newInvitations: UserParticipationStatus[] = [];
     for (let i = 0; i < invitedUsers.length; i++) {
-      const previousInvitation = await userParticipationStatusRepository.findOne(
-        {
+      const previousInvitation =
+        await userParticipationStatusRepository.findOne({
           meeting: meeting,
           participant: invitedUsers[i]
-        }
-      );
+        });
 
       if (!previousInvitation) {
         const invitation = userParticipationStatusRepository.create({
