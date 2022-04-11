@@ -5,6 +5,7 @@ import { config } from 'dotenv';
 import cors from 'cors';
 import { json } from 'body-parser';
 import cookieParser from 'cookie-parser';
+import csurf from 'csurf';
 
 import connectToDatabase from './databaseConfig/databaseConfig';
 import rootRouter from './routes';
@@ -27,6 +28,12 @@ async function main() {
   );
   app.use(json());
   app.use(cookieParser());
+  app.use(
+    csurf({
+      cookie: true
+    })
+  );
+  app.get('/csrf', (req, res) => res.send({ csrfToken: req.csrfToken() }));
   app.use(rootRouter);
   app.use(errorHandler);
 

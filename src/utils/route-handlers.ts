@@ -23,6 +23,9 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   if (process.env.ENVIRONMENT === 'DEV') {
     console.error(err);
   }
+  if (err.code === 'EBADCSRFTOKEN') {
+    return res.status(StatusCodes.FORBIDDEN).send();
+  }
   if (err instanceof EntityNotFoundError) {
     return res.status(StatusCodes.NOT_FOUND).send();
   }
