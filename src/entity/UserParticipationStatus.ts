@@ -1,8 +1,18 @@
-import { Entity, Column, ManyToOne } from 'typeorm';
-import { ParticipationStatus } from '../controllers/meeting/meetingController';
+import { Column, Entity, ManyToOne } from 'typeorm';
 import BaseEntity from './base/BaseEntity';
 import Meeting from './Meeting';
-import User from './User';
+import User, { IUser } from './User';
+
+export enum ParticipationStatus {
+  Invited = 'invited',
+  Maybe = 'maybe',
+  Going = 'going',
+  Declined = 'declined'
+}
+
+export interface IParticipant extends IUser {
+  userParticipationStatus: ParticipationStatus;
+}
 
 @Entity()
 class UserParticipationStatus extends BaseEntity {
@@ -12,8 +22,21 @@ class UserParticipationStatus extends BaseEntity {
   @ManyToOne(() => User)
   participant: User;
 
+  @Column()
+  participantId: number;
+
   @ManyToOne(() => Meeting)
   meeting: Meeting;
+
+  @Column()
+  meetingId: number;
+
+  toParticipant(): IParticipant {
+    return {
+      ...this?.participant,
+      userParticipationStatus: this.userParticipationStatus
+    };
+  }
 }
 
 export default UserParticipationStatus;

@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import {
-  register,
   login,
+  logout,
   refreshToken,
-  logout
+  register
 } from '../controllers/auth/authController';
 import { notAllowedHandler } from '../utils/route-handlers';
 

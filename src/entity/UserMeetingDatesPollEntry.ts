@@ -1,13 +1,5 @@
-import {
-  Entity,
-  Column,
-  ManyToMany,
-  JoinTable,
-  ManyToOne,
-  OneToMany
-} from 'typeorm';
+import { Column, Entity, ManyToOne } from 'typeorm';
 import BaseEntity from './base/BaseEntity';
-import Meeting from './Meeting';
 import MeetingDatesPollEntry from './MeetingDatesPollEntry';
 import User from './User';
 
@@ -16,8 +8,14 @@ class UserMeetingDatesPollEntry extends BaseEntity {
   @ManyToOne(() => MeetingDatesPollEntry)
   meetingDatesPollEntry: MeetingDatesPollEntry;
 
+  @Column()
+  meetingDatesPollEntryId: number;
+
   @ManyToOne(() => User)
   user: User;
+
+  @Column()
+  userId: number;
 }
 
 export default UserMeetingDatesPollEntry;

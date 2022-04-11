@@ -1,11 +1,15 @@
-import { Entity, Column, OneToMany, ManyToOne, JoinTable } from 'typeorm';
+import { Column, Entity, ManyToOne, OneToMany } from 'typeorm';
 import Activity from './Activity';
 import Announcement from './Announcement';
 import BaseEntity from './base/BaseEntity';
 import Expense from './Expense';
-import MeetingDatesPollEntry from './MeetingDatesPollEntry';
-import User from './User';
-import UserParticipationStatus from './UserParticipationStatus';
+import MeetingDatesPollEntry, {
+  IMeetingDatesPollEntry
+} from './MeetingDatesPollEntry';
+import User, { IUser } from './User';
+import UserParticipationStatus, {
+  IParticipant
+} from './UserParticipationStatus';
 
 export enum MeetingStatus {
   Planned,
@@ -14,6 +18,22 @@ export enum MeetingStatus {
   Extended,
   Ended,
   Canceled
+}
+
+export interface IMeeting {
+  id: number;
+  name: string;
+  description: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  status: MeetingStatus;
+  locationId: string | null;
+  locationString: string | null;
+  isDatesPollActive: boolean;
+  canUsersAddPollEntries: boolean;
+  creator: IUser;
+  participants: IParticipant[];
+  meetingDatesPollEntries: IMeetingDatesPollEntry[];
 }
 
 @Entity()
@@ -56,7 +76,6 @@ class Meeting extends BaseEntity {
     () => UserParticipationStatus,
     (participation) => participation.meeting
   )
-  @JoinTable()
   participants: UserParticipationStatus[];
 
   @OneToMany(
@@ -73,6 +92,33 @@ class Meeting extends BaseEntity {
 
   @OneToMany(() => Activity, (activity) => activity.meeting, { cascade: true })
   activities: Activity[];
+
+  toJSON = (): IMeeting => {
+    return {
+      ...this,
+      participants:
+        this.participants?.map((participant) => participant.toParticipant()) ||
+        [],
+      meetingDatesPollEntries:
+        this.meetingDatesPollEntries
+          ?.sort((entry, otherEntry) => {
+            if (
+              entry.userMeetingDatesPollEntries.length ===
+              otherEntry.userMeetingDatesPollEntries.length
+            ) {
+              return (
+                new Date(entry.startDate).getTime() -
+                new Date(otherEntry.startDate).getTime()
+              );
+            }
+            return (
+              otherEntry.userMeetingDatesPollEntries.length -
+              entry.userMeetingDatesPollEntries.length
+            );
+          })
+          .map((entry) => entry.toJSON()) || []
+    };
+  };
 }
 
 export default Meeting;

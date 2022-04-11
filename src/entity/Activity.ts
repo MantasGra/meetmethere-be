@@ -1,6 +1,14 @@
-import { Entity, Column, ManyToOne } from 'typeorm';
-import BaseEntity from './base/BaseEntity';
+import { Column, Entity, ManyToOne } from 'typeorm';
+import BaseEntity, { omitBaseDates } from './base/BaseEntity';
 import Meeting from './Meeting';
+
+export interface IActivity {
+  id: number;
+  name: string;
+  description: string;
+  startTime: Date;
+  endTime: Date;
+}
 
 @Entity()
 class Activity extends BaseEntity {
@@ -18,6 +26,15 @@ class Activity extends BaseEntity {
 
   @ManyToOne(() => Meeting, { nullable: false })
   meeting: Meeting;
+
+  @Column()
+  meetingId: number;
+
+  toJSON = (): IActivity => {
+    const result = { ...omitBaseDates(this) };
+    delete result.meetingId;
+    return result;
+  };
 }
 
 export default Activity;
