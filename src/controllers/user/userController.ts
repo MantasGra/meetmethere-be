@@ -1,78 +1,54 @@
-import { RequestHandler, Response } from 'express';
 import type { Query } from 'express-serve-static-core';
 import { StatusCodes } from 'http-status-codes';
-import { EntityNotFoundError, getRepository, ILike, Not } from 'typeorm';
-import { AuthenticatedRequest } from '../auth/authController';
-import User, { UserColors } from '../../entity/User';
+import { ILike, Not, getRepository } from 'typeorm';
+import { AuthenticatedHandler } from '../auth/authController';
+import User, { IUser } from '../../entity/User';
+import { asyncHandler } from '../../utils/route-handlers';
 
-interface IUserResponse {
-  id: number;
-  name: string;
-  lastName: string;
-  email: string;
-  createDate: Date;
-  color: UserColors;
-}
+export const getSelf = asyncHandler<
+  AuthenticatedHandler<Record<string, never>, IUser>
+>(async (req, res) => {
+  const userRepository = getRepository(User);
+  const user = await userRepository.findOneOrFail(res.locals.user.id);
+  return res.status(StatusCodes.OK).json({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    lastName: user.lastName,
+    color: user.color
+  });
+});
 
-export const getSelf: RequestHandler = async (
-  req: AuthenticatedRequest,
-  res: Response<IUserResponse>
-) => {
-  try {
-    const userRepository = getRepository(User);
-    const user = await userRepository.findOneOrFail(req.user.id);
-    return res.status(StatusCodes.OK).json({
-      id: user.id,
-      email: user.email,
-      createDate: user.createDate,
-      name: user.name,
-      lastName: user.lastName,
-      color: user.color
-    });
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
-
-export interface IUserSelectOptionsRequestQuery extends Query {
+export interface UserSelectOptionsRequestQuery extends Query {
   searchText: string;
 }
 
-export interface IUserSelectOptionsResponse {
-  options: Array<{
-    id: number;
-    name: string;
-    lastName: string;
-    color: UserColors;
-  }>;
+export interface UserSelectOptionsResponse {
+  options: Omit<IUser, 'email'>[];
 }
 
-export const getUserSelectOptions: RequestHandler = async (
-  req: AuthenticatedRequest<
+export const getUserSelectOptions = asyncHandler<
+  AuthenticatedHandler<
     Record<string, never>,
-    IUserSelectOptionsResponse,
+    UserSelectOptionsResponse,
     Record<string, never>,
-    IUserSelectOptionsRequestQuery
-  >,
-  res: Response<IUserSelectOptionsResponse>
-) => {
+    UserSelectOptionsRequestQuery
+  >
+>(async (req, res) => {
   try {
     const userRepository = getRepository(User);
-    const searchWords = req.query.searchText
+    const searchWords = (req.query.searchText || '')
       .split(' ')
       .map((value) => `%${value}%`);
     const userSelectOptions = await userRepository.find({
       select: ['id', 'name', 'lastName', 'color'],
       where: [
         ...searchWords.map((word) => ({
-          id: Not(req.user.id),
+          id: Not(res.locals.user.id),
           name: ILike(word)
         })),
         ...searchWords.map((word) => ({
-          id: Not(req.user.id),
+          id: Not(res.locals.user.id),
           lastName: ILike(word)
         }))
       ],
@@ -89,4 +65,4 @@ export const getUserSelectOptions: RequestHandler = async (
   } catch (error) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
-};
+});

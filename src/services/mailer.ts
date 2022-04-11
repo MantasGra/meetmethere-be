@@ -7,6 +7,10 @@ export const sendMeetingInvitationMail = (
   meeting: Meeting,
   invitationLink: string
 ): void => {
+  if (process.env.ENVIRONMENT === 'DEV') {
+    console.log('Email not sent. It was skipped.');
+    return;
+  }
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
   const mail = {

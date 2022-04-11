@@ -1,180 +1,84 @@
-import { RequestHandler, Response } from 'express';
-import { ParamsDictionary } from 'express-serve-static-core';
-import { EntityNotFoundError, getRepository } from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
-import { AuthenticatedRequest } from '../auth/authController';
-import Meeting from '../../entity/Meeting';
-import Activity from '../../entity/Activity';
+import { getRepository } from 'typeorm';
 
-interface MeetingActivityRouteParams extends ParamsDictionary {
-  id: string;
-}
+import { MeetingRouteParams } from './meetingController';
+import { AuthenticatedHandler } from '../auth/authController';
+import Activity, { IActivity } from '../../entity/Activity';
+import { asyncHandler } from '../../utils/route-handlers';
 
-interface EditMeetingActivityRouteParams extends ParamsDictionary {
-  activityId: string;
-  meetingId: string;
-}
-
-export const getMeetingActivities: RequestHandler = async (
-  req: AuthenticatedRequest<
-    MeetingActivityRouteParams,
-    Activity[],
-    Record<string, never>
-  >,
-  res: Response<Activity[]>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const activityRepository = getRepository(Activity);
-    const userId = req.user.id;
-    const meetingId = parseInt(req.params.id);
-
-    await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
-          userId
-        }
-      )
-      .getOneOrFail();
-
-    const activities = await activityRepository
-      .createQueryBuilder('activity')
-      .where('activity.meetingId = :meetingId', { meetingId })
-      .getMany();
-
-    return res.status(StatusCodes.OK).json(activities);
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    console.log(error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
-
-interface ICreateMeetingActivityRequest {
-  name: string;
-  description: string;
-  startTime: Date;
-  endTime: Date;
-}
-
-interface IEditMeetingActivityRequest {
-  id: number;
-  name: string;
-  description: string;
-  startTime: Date;
-  endTime: Date;
-}
-
-export const createMeetingActivity: RequestHandler = async (
-  req: AuthenticatedRequest<
-    MeetingActivityRouteParams,
-    Activity,
-    ICreateMeetingActivityRequest,
-    Record<string, never>
-  >,
-  res: Response<Activity>
-) => {
-  const meetingRepository = getRepository(Meeting);
+export const getMeetingActivities = asyncHandler<
+  AuthenticatedHandler<MeetingRouteParams, IActivity[]>
+>(async (req, res) => {
   const activityRepository = getRepository(Activity);
-  const userId = req.user.id;
+
   const meetingId = parseInt(req.params.id);
 
-  try {
-    const meeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .andWhere('meeting.creatorId = :userId', { userId })
-      .getOneOrFail();
-
-    const activity = activityRepository.create({
-      ...req.body,
-      meeting: meeting
-    });
-
-    await activityRepository.save(activity);
-    return res.status(StatusCodes.CREATED).json(activity);
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
+  const activities = await activityRepository.find({
+    where: {
+      meeting: {
+        id: meetingId
+      }
     }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+  });
 
-export const editMeetingActivity: RequestHandler = async (
-  req: AuthenticatedRequest<
-    EditMeetingActivityRouteParams,
-    Activity,
-    IEditMeetingActivityRequest,
-    Record<string, never>
-  >,
-  res: Response<Activity>
-) => {
-  const meetingRepository = getRepository(Meeting);
+  return res
+    .status(StatusCodes.OK)
+    .json(activities.map((activity) => activity.toJSON()));
+});
+
+type CreateActivityRequest = Omit<IActivity, 'id'>;
+
+export const createMeetingActivity = asyncHandler<
+  AuthenticatedHandler<MeetingRouteParams, IActivity, CreateActivityRequest>
+>(async (req, res) => {
   const activityRepository = getRepository(Activity);
-  const userId = req.user.id;
-  const meetingId = parseInt(req.params.meetingId);
+
+  const meetingId = parseInt(req.params.id);
+
+  const activity = activityRepository.create({
+    ...req.body,
+    meetingId
+  });
+
+  await activityRepository.save(activity);
+  return res.status(StatusCodes.CREATED).json(activity.toJSON());
+});
+
+interface MeetingActivityRouteParams extends MeetingRouteParams {
+  activityId: string;
+}
+
+type EditActivityRequest = Partial<CreateActivityRequest>;
+
+export const editMeetingActivity = asyncHandler<
+  AuthenticatedHandler<
+    MeetingActivityRouteParams,
+    IActivity,
+    EditActivityRequest
+  >
+>(async (req, res) => {
+  const activityRepository = getRepository(Activity);
+
   const activityId = parseInt(req.params.activityId);
 
-  try {
-    await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .andWhere('meeting.creatorId = :userId', { userId })
-      .getOneOrFail();
+  const activity = await activityRepository.findOneOrFail(activityId);
 
-    const activity = await activityRepository.findOneOrFail(activityId);
+  const updatedActivity = activityRepository.merge(activity, req.body);
 
-    const result = await activityRepository.save({
-      ...activity,
-      ...req.body
-    });
-    return res.status(StatusCodes.OK).json(result);
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+  await activityRepository.save(updatedActivity);
 
-export const deleteMeetingActivity: RequestHandler = async (
-  req: AuthenticatedRequest<EditMeetingActivityRouteParams>,
-  res: Response
-) => {
+  return res.status(StatusCodes.OK).json(updatedActivity.toJSON());
+});
+
+export const deleteMeetingActivity = asyncHandler<
+  AuthenticatedHandler<MeetingActivityRouteParams>
+>(async (req, res) => {
   const activityRepository = getRepository(Activity);
-  const meetingRepository = getRepository(Meeting);
-  const userId = req.user.id;
 
-  const meetingId = parseInt(req.params.meetingId);
   const activityId = parseInt(req.params.activityId);
 
-  try {
-    await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .andWhere('meeting.creatorId = :userId', { userId })
-      .getOneOrFail();
+  const activity = await activityRepository.findOneOrFail(activityId);
 
-    const activity = await activityRepository
-      .createQueryBuilder('activity')
-      .where('activity.id = :activityId', { activityId })
-      .getOneOrFail();
-
-    await activityRepository.softRemove(activity);
-    return res.status(StatusCodes.NO_CONTENT).send();
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    console.log(error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+  await activityRepository.softRemove(activity);
+  return res.status(StatusCodes.NO_CONTENT).send();
+});

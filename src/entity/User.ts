@@ -1,7 +1,7 @@
-import { Entity, Column, BeforeInsert, ManyToMany, OneToMany } from 'typeorm';
+import { BeforeInsert, Column, Entity, ManyToMany, OneToMany } from 'typeorm';
 import BaseEntity from './base/BaseEntity';
 import Meeting from './Meeting';
-import hashPassword from '../utils/hashPassword';
+import { hashPassword } from '../utils/hashPassword';
 import randomEnum from '../utils/randomEnum';
 import Expense from './Expense';
 import UserMeetingDatesPollEntry from './UserMeetingDatesPollEntry';
@@ -18,6 +18,14 @@ export enum UserColors {
   DesertSand = '#DDBEA8',
   LightGoldenrodYellow = '#FAFFD8',
   PastelPink = '#D6A2AD'
+}
+
+export interface IUser {
+  id: number;
+  email: string;
+  name: string;
+  lastName: string;
+  color: UserColors;
 }
 
 @Entity()
@@ -56,8 +64,8 @@ class User extends BaseEntity {
   }
 
   @BeforeInsert()
-  hashPassword(): void {
-    this.password = hashPassword(this.password);
+  async hashPassword(): Promise<void> {
+    this.password = await hashPassword(this.password);
   }
 
   @ManyToMany(() => Expense, (expense) => expense.users)

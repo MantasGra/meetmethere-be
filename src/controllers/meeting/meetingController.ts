@@ -1,172 +1,188 @@
-import { Request, RequestHandler, Response } from 'express';
 import { ParamsDictionary, Query } from 'express-serve-static-core';
-import { EntityNotFoundError, getRepository, ILike, In, Not } from 'typeorm';
+import { ILike, In, Not, getRepository } from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
-import { AuthenticatedRequest } from '../auth/authController';
-import Meeting, { MeetingStatus } from '../../entity/Meeting';
-import MeetingDatesPollEntry from '../../entity/MeetingDatesPollEntry';
+import { AuthenticatedHandler } from '../auth/authController';
+import Meeting, { MeetingStatus, IMeeting } from '../../entity/Meeting';
+import MeetingDatesPollEntry, {
+  IMeetingDatesPollEntry
+} from '../../entity/MeetingDatesPollEntry';
 import User from '../../entity/User';
 import UserMeetingDatesPollEntry from '../../entity/UserMeetingDatesPollEntry';
 import { sendMeetingInvitationMail } from '../../services/mailer';
-import UserParticipationStatus from '../../entity/UserParticipationStatus';
+import UserParticipationStatus, {
+  ParticipationStatus,
+  IParticipant
+} from '../../entity/UserParticipationStatus';
 import {
-  IUserSelectOptionsRequestQuery,
-  IUserSelectOptionsResponse
+  UserSelectOptionsRequestQuery,
+  UserSelectOptionsResponse
 } from '../user/userController';
+import { asyncHandler } from '../../utils/route-handlers';
 
-const MEETINGS_PAGE_SIZE = 10;
-
-export enum ParticipationStatus {
-  Invited = 'invited',
-  Maybe = 'maybe',
-  Going = 'going',
-  Declined = 'declined'
-}
-
-type UserMeetingsResponse =
-  | {
-      meetings: any[];
-      count: number;
-    }
-  | string;
-
-interface IUserMeetingsQueryParams extends Query {
-  page: string;
-  typeOfMeeting: string;
-}
-
-export const getUserMeetings: RequestHandler = async (
-  req: AuthenticatedRequest<
-    Record<string, never>,
-    UserMeetingsResponse,
-    Record<string, never>,
-    IUserMeetingsQueryParams
-  >,
-  res: Response<UserMeetingsResponse>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const userId = req.user.id;
-    const page = parseInt(req.query.page);
-    if (!page) {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .send('Please provide a page parameter.');
-    }
-    const offset = (page - 1) * MEETINGS_PAGE_SIZE;
-    const meetingStatuses =
-      req.query.typeOfMeeting === 'planned' ? ['0', '1', '2', '3'] : ['4', '5'];
-    const userParticipatedMeetings = await meetingRepository
-      .createQueryBuilder('meeting')
-      .leftJoin('meeting.participants', 'participants')
-      .innerJoin('participants.participant', 'user', 'user.id = :userId', {
-        userId
-      })
-      .where('meeting.status IN (:...meetingStatuses)', {
-        meetingStatuses: meetingStatuses
-      })
-      .orderBy('meeting.startDate', 'ASC')
-      .leftJoinAndSelect('meeting.creator', 'creator')
-      .leftJoinAndSelect('meeting.participants', 'participants2')
-      .leftJoinAndSelect('participants2.participant', 'participant')
-      .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
-      .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
-      .leftJoinAndSelect('votes.user', 'votedUser')
-      .orderBy('pollEntries.createDate', 'ASC')
-      .skip(offset)
-      .take(MEETINGS_PAGE_SIZE)
-      .getManyAndCount();
-
-    return res.status(StatusCodes.OK).json({
-      meetings: userParticipatedMeetings[0].map((meeting) => ({
-        ...meeting,
-        participants: meeting.participants.map((participant) => ({
-          userParticipationStatus: participant.userParticipationStatus,
-          ...participant.participant
-        }))
-      })),
-      count: userParticipatedMeetings[1]
-    });
-  } catch (error) {
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
-
-interface IGetMeetingParams extends ParamsDictionary {
+export interface MeetingRouteParams extends ParamsDictionary {
   id: string;
 }
 
-type MeetingResponse =
-  | {
-      meeting: Meeting;
-    }
-  | string;
+export const isMeetingParticipant = asyncHandler<
+  AuthenticatedHandler<MeetingRouteParams>
+>(async (req, res, next) => {
+  const meetingRepository = getRepository(Meeting);
 
-export const getMeeting: RequestHandler = async (
-  req: AuthenticatedRequest<IGetMeetingParams, MeetingResponse>,
-  res: Response<any>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const userId = req.user.id;
-    const meetingId = parseInt(req.params.id);
-    if (!meetingId) {
-      return res.status(StatusCodes.BAD_REQUEST).send();
-    }
-    const meeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
-          userId
-        }
-      )
-      .leftJoinAndSelect('meeting.creator', 'creator')
-      .leftJoinAndSelect('meeting.participants', 'participants')
-      .leftJoinAndSelect('participants.participant', 'participant')
-      .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
-      .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
-      .leftJoinAndSelect('votes.user', 'votedUser')
-      .orderBy('pollEntries.createDate', 'ASC')
-      .getOneOrFail();
+  const userId = res.locals.user.id;
+  const meetingId = parseInt(req.params.id);
 
-    return res.status(StatusCodes.OK).json({
-      meeting: {
-        ...meeting,
-        participants: meeting.participants.map((participant) => ({
-          userParticipationStatus: participant.userParticipationStatus,
-          ...participant.participant
-        }))
-      }
-    });
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  await meetingRepository
+    .createQueryBuilder('meeting')
+    .where('meeting.id = :meetingId', { meetingId })
+    .innerJoin('meeting.participants', 'user', 'user.participantId = :userId', {
+      userId
+    })
+    .getOneOrFail();
+
+  next();
+});
+
+export const isMeetingCreator = asyncHandler<
+  AuthenticatedHandler<MeetingRouteParams>
+>(async (req, res, next) => {
+  const meetingRepository = getRepository(Meeting);
+
+  const userId = res.locals.user.id;
+  const meetingId = parseInt(req.params.id);
+
+  const meeting = await meetingRepository.findOneOrFail(meetingId, {
+    relations: ['creator']
+  });
+
+  if (meeting.creator.id !== userId) {
+    return res.status(StatusCodes.FORBIDDEN).send();
   }
-};
 
-interface ICreateMeetingRequest {
+  next();
+});
+
+const MEETINGS_PAGE_SIZE = 10;
+
+interface UserMeetingsResponse {
+  meetings: IMeeting[];
+  count: number;
+}
+
+interface UserMeetingsQueryParams extends Query {
+  page: string;
+  typeOfMeeting: '' | 'planned' | 'archived';
+}
+
+export const getUserMeetings = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
+    UserMeetingsResponse,
+    Record<string, never>,
+    UserMeetingsQueryParams
+  >
+>(async (req, res) => {
+  const meetingRepository = getRepository(Meeting);
+  const userId = res.locals.user.id;
+  const page = parseInt(req.query.page) || 1;
+  const offset = (page - 1) * MEETINGS_PAGE_SIZE;
+  const meetingStatuses =
+    req.query.typeOfMeeting === 'archived'
+      ? [MeetingStatus.Ended, MeetingStatus.Canceled]
+      : [
+          MeetingStatus.Planned,
+          MeetingStatus.Postponed,
+          MeetingStatus.Started,
+          MeetingStatus.Extended
+        ];
+
+  // This query builder is required here as usual find options
+  // are unable to apply conditions on joins and this join is important
+  // to filter out only meetings where current user participates
+  const userParticipatedMeetings = await meetingRepository
+    .createQueryBuilder('meeting')
+    .leftJoin('meeting.participants', 'participants')
+    .innerJoin('participants.participant', 'user', 'user.id = :userId', {
+      userId
+    })
+    .where('meeting.status IN (:...meetingStatuses)', {
+      meetingStatuses: meetingStatuses
+    })
+    .orderBy('meeting.startDate', 'ASC')
+    .leftJoinAndSelect('meeting.creator', 'creator')
+    .leftJoinAndSelect('meeting.participants', 'participants2')
+    .leftJoinAndSelect('participants2.participant', 'participant')
+    .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
+    .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
+    .leftJoinAndSelect('votes.user', 'votedUser')
+    .skip(offset)
+    .take(MEETINGS_PAGE_SIZE)
+    .getManyAndCount();
+
+  return res.status(StatusCodes.OK).json({
+    meetings: userParticipatedMeetings[0].map((meeting) => meeting.toJSON()),
+    count: userParticipatedMeetings[1]
+  });
+});
+
+interface MeetingResponse {
+  meeting: IMeeting;
+}
+
+export const getMeeting = asyncHandler<
+  AuthenticatedHandler<MeetingRouteParams, MeetingResponse>
+>(async (req, res) => {
+  const meetingRepository = getRepository(Meeting);
+  const meetingId = parseInt(req.params.id);
+
+  const meeting = await meetingRepository.findOneOrFail(meetingId, {
+    join: {
+      alias: 'meeting',
+      leftJoinAndSelect: {
+        creator: 'meeting.creator',
+        participants: 'meeting.participants',
+        participant: 'participants.participant',
+        pollEntries: 'meeting.meetingDatesPollEntries',
+        votes: 'pollEntries.userMeetingDatesPollEntries',
+        votedUser: 'votes.user'
+      }
+    }
+  });
+
+  return res.status(StatusCodes.OK).json({
+    meeting: meeting.toJSON()
+  });
+});
+
+type INewMeetingDatesPollEntry = Pick<
+  IMeetingDatesPollEntry,
+  'startDate' | 'endDate'
+>;
+
+interface CreateMeetingRequest {
   name: string;
   description: string;
-  startDate: Date;
-  endDate: Date;
-  locationId: string;
-  locationString: string;
+  startDate?: Date;
+  endDate?: Date;
+  locationId?: string;
+  locationString?: string;
   status: MeetingStatus;
   isDatesPollActive: boolean;
   canUsersAddPollEntries: boolean;
   participantIds: number[];
+  datesPollEntries: INewMeetingDatesPollEntry[];
 }
 
-export const createMeeting: RequestHandler = async (
-  req: AuthenticatedRequest<Record<string, never>, ICreateMeetingRequest>,
-  res: Response
-) => {
+interface CreateMeetingResponse {
+  createdMeeting: IMeeting;
+}
+
+export const createMeeting = asyncHandler<
+  AuthenticatedHandler<
+    Record<string, never>,
+    CreateMeetingResponse,
+    CreateMeetingRequest
+  >
+>(async (req, res) => {
   const {
     name,
     description,
@@ -180,167 +196,139 @@ export const createMeeting: RequestHandler = async (
     participantIds,
     datesPollEntries
   } = req.body;
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const userRepository = getRepository(User);
-    const participantStatusRepository = getRepository(UserParticipationStatus);
-    const userId = req.user.id;
-    const creatorUser = await userRepository.findOne(userId);
-    const participants = await userRepository.find({
-      where: {
-        id: In(participantIds)
-      }
-    });
-
-    const newMeeting = meetingRepository.create({
-      name,
-      description,
-      startDate,
-      endDate,
-      status,
-      locationId,
-      locationString,
-      isDatesPollActive,
-      canUsersAddPollEntries,
-      creator: creatorUser
-    });
-    await meetingRepository.save(newMeeting);
-    const meetingDatesPollEntryRepository = getRepository(
-      MeetingDatesPollEntry
-    );
-    if (isDatesPollActive) {
-      for (let i = 0; i < datesPollEntries.length; i++) {
-        const pollEntry = meetingDatesPollEntryRepository.create({
-          ...datesPollEntries[i],
-          meeting: newMeeting
-        });
-        await meetingDatesPollEntryRepository.save(pollEntry);
-      }
+  const meetingRepository = getRepository(Meeting);
+  const userRepository = getRepository(User);
+  const participantStatusRepository = getRepository(UserParticipationStatus);
+  const userId = res.locals.user.id;
+  const creatorUser = await userRepository.findOne(userId);
+  const participants = await userRepository.find({
+    where: {
+      id: In(participantIds)
     }
-
-    const participantsStatuses = participantStatusRepository.create(
-      participants.map((user) => ({
-        participant: user,
-        meeting: newMeeting,
-        userParticipationStatus: ParticipationStatus.Invited
-      }))
-    );
-
-    await participantStatusRepository.save([
-      participantStatusRepository.create({
-        participant: creatorUser,
-        meeting: newMeeting,
-        userParticipationStatus: ParticipationStatus.Going
-      }),
-      ...participantsStatuses
-    ]);
-
-    sendMeetingInvitationMail(
-      participants,
-      newMeeting,
-      process.env.APP_URL + '/invitations'
-    );
-    const refreshedMeeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId: newMeeting.id })
-      .leftJoinAndSelect('meeting.creator', 'creator')
-      .leftJoinAndSelect('meeting.participants', 'participants')
-      .leftJoinAndSelect('participants.participant', 'participant')
-      .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
-      .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
-      .leftJoinAndSelect('votes.user', 'votedUser')
-      .getOne();
-
-    return res.status(StatusCodes.CREATED).send({
-      createdMeeting: {
-        ...refreshedMeeting,
-        participants: refreshedMeeting.participants.map((participant) => ({
-          userParticipationStatus: participant.userParticipationStatus,
-          ...participant.participant
-        }))
-      }
-    });
-  } catch (error) {
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  });
+  const newMeeting = meetingRepository.create({
+    name,
+    description,
+    startDate,
+    endDate,
+    status,
+    locationId,
+    locationString,
+    isDatesPollActive,
+    canUsersAddPollEntries,
+    creator: creatorUser
+  });
+  await meetingRepository.save(newMeeting);
+  const meetingDatesPollEntryRepository = getRepository(MeetingDatesPollEntry);
+  if (isDatesPollActive) {
+    for (let i = 0; i < datesPollEntries.length; i++) {
+      const pollEntry = meetingDatesPollEntryRepository.create({
+        ...datesPollEntries[i],
+        meeting: newMeeting
+      });
+      await meetingDatesPollEntryRepository.save(pollEntry);
+    }
   }
-};
 
-interface IMeetingUpdateParams extends ParamsDictionary {
-  id: string;
-}
+  const participantsStatuses = participantStatusRepository.create(
+    participants.map((user) => ({
+      participant: user,
+      meeting: newMeeting,
+      userParticipationStatus: ParticipationStatus.Invited
+    }))
+  );
 
-interface IUpdatedFieldsRequest {
-  name: string;
-  description: string;
-  status: MeetingStatus;
-  locationId: string;
-  locationString: string;
-  startDate: Date;
-  endDate: Date;
-}
+  await participantStatusRepository.save([
+    participantStatusRepository.create({
+      participant: creatorUser,
+      meeting: newMeeting,
+      userParticipationStatus: ParticipationStatus.Going
+    }),
+    ...participantsStatuses
+  ]);
 
-interface IUpdatedFieldsResponse extends IUpdatedFieldsRequest {
-  id: number;
-}
+  sendMeetingInvitationMail(
+    participants,
+    newMeeting,
+    process.env.APP_URL + '/invitations'
+  );
 
-export const updateMeeting: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingUpdateParams,
-    IUpdatedFieldsResponse,
-    IUpdatedFieldsRequest
-  >,
-  res: Response<IUpdatedFieldsResponse>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const meetingId = parseInt(req.params.id);
-    const userId = req.user.id;
-    if (!meetingId) {
-      return res.status(StatusCodes.BAD_REQUEST).send();
+  const refreshedMeeting = await meetingRepository.findOne(newMeeting.id, {
+    join: {
+      alias: 'meeting',
+      leftJoinAndSelect: {
+        creator: 'meeting.creator',
+        participants: 'meeting.participants',
+        participant: 'participants.participant',
+        pollEntries: 'meeting.meetingDatesPollEntries'
+      }
     }
-    await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.creator', 'creator', 'creator.id = :userId', {
-        userId
-      })
-      .getOneOrFail();
+  });
 
-    await meetingRepository.update(meetingId, req.body);
-    return res.status(StatusCodes.OK).json({
-      id: meetingId,
-      ...req.body
-    });
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
+  return res.status(StatusCodes.CREATED).send({
+    createdMeeting: refreshedMeeting.toJSON()
+  });
+});
+
+interface UpdateMeetingRequest {
+  name?: string;
+  description?: string;
+  status?: MeetingStatus;
+  locationId?: string;
+  locationString?: string;
+  startDate?: Date;
+  endDate?: Date;
+}
+
+interface UpdateMeetingResponse {
+  updatedMeeting: IMeeting;
+}
+
+export const updateMeeting = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
+    UpdateMeetingResponse,
+    UpdateMeetingRequest
+  >
+>(async (req, res) => {
+  const meetingRepository = getRepository(Meeting);
+  const meetingId = parseInt(req.params.id);
+
+  await meetingRepository.update(meetingId, req.body);
+
+  const refreshedMeeting = await meetingRepository.findOne(meetingId, {
+    join: {
+      alias: 'meeting',
+      leftJoinAndSelect: {
+        creator: 'meeting.creator',
+        participants: 'meeting.participants',
+        participant: 'participants.participant',
+        pollEntries: 'meeting.meetingDatesPollEntries'
+      }
     }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+  });
+  return res
+    .status(StatusCodes.OK)
+    .json({ updatedMeeting: refreshedMeeting.toJSON() });
+});
 
-interface IMeetingAnnouncementGetParams extends ParamsDictionary {
-  id: string;
+interface IMeetingDatesPollVotes {
+  [meetingDatePollEntryId: string]: boolean;
 }
 
-interface IMeetingDatesPollEntryRequest {
-  newMeetingDatesPollEntries: MeetingDatesPollEntry[];
-  votes: IMeetingDatesPollVote[];
+interface MeetingDatesPollEntryRequest {
+  newMeetingDatesPollEntries: INewMeetingDatesPollEntry[];
+  votes: IMeetingDatesPollVotes;
 }
 
-interface IMeetingDatesPollVote {
-  meetingDatePollEntryId: boolean;
-}
-
-export const updateUserMeetingDatePollEntries: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingAnnouncementGetParams,
-    MeetingDatesPollEntry[],
-    IMeetingDatesPollEntryRequest
-  >,
-  res: Response<MeetingDatesPollEntry[]>
-) => {
-  const userId = req.user.id;
+export const updateUserMeetingDatePollEntries = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
+    IMeetingDatesPollEntry[],
+    MeetingDatesPollEntryRequest
+  >
+>(async (req, res) => {
+  const userId = res.locals.user.id;
   const meetingId = parseInt(req.params.id);
   const meetingRepository = getRepository(Meeting);
   const meetingDatesPollEntryRepository = getRepository(MeetingDatesPollEntry);
@@ -348,317 +336,262 @@ export const updateUserMeetingDatePollEntries: RequestHandler = async (
     UserMeetingDatesPollEntry
   );
   const userRepository = getRepository(User);
+  const meeting = await meetingRepository.findOne(meetingId, {
+    join: {
+      alias: 'meeting',
+      leftJoinAndSelect: {
+        creator: 'meeting.creator',
+        pollEntries: 'meeting.meetingDatesPollEntries'
+      }
+    }
+  });
 
-  try {
-    const meeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
+  if (!meeting.isDatesPollActive) {
+    return res.status(StatusCodes.BAD_REQUEST).send();
+  }
+
+  const user = await userRepository.findOne(userId);
+
+  const newPollEntries = req.body.newMeetingDatesPollEntries;
+  const pollEntryVotes = req.body.votes;
+
+  if (
+    !meeting.canUsersAddPollEntries &&
+    newPollEntries &&
+    newPollEntries.length &&
+    meeting.creator.id !== user.id
+  ) {
+    return res.status(StatusCodes.FORBIDDEN).send();
+  }
+
+  if (newPollEntries) {
+    for (let i = 0; i < newPollEntries.length; i++) {
+      const pollEntry = meetingDatesPollEntryRepository.create({
+        ...newPollEntries[i],
+        meeting: meeting
+      });
+      await meetingDatesPollEntryRepository.save(pollEntry);
+      const newVote = userMeetingDatesPollEntryRepository.create({
+        meetingDatesPollEntry: pollEntry,
+        user: user
+      });
+      await userMeetingDatesPollEntryRepository.save(newVote);
+    }
+  }
+
+  if (pollEntryVotes) {
+    const pollEntryKeys = Object.keys(pollEntryVotes);
+    for (let i = 0; i < pollEntryKeys.length; i++) {
+      const entryId = parseInt(pollEntryKeys[i]);
+      const pollEntry = await meetingDatesPollEntryRepository.findOne(entryId);
+      if (!pollEntry) {
+        return res.status(StatusCodes.BAD_REQUEST).send();
+      }
+      const previousVote = await userMeetingDatesPollEntryRepository.findOne({
+        where: {
+          meetingDatesPollEntryId: entryId,
           userId
         }
-      )
-      .leftJoinAndSelect('meeting.creator', 'creator')
-      .leftJoinAndSelect(
-        'meeting.meetingDatesPollEntries',
-        'meetingDatesPollEntries'
-      )
-      .getOneOrFail();
+      });
 
-    const user = await userRepository.findOne(userId);
-
-    if (
-      !meeting.canUsersAddPollEntries &&
-      req.body.newMeetingDatesPollEntries &&
-      req.body.newMeetingDatesPollEntries.length &&
-      meeting.creator.id !== user.id
-    ) {
-      return res.status(StatusCodes.FORBIDDEN).send();
-    }
-
-    const newPollEntries = req.body.newMeetingDatesPollEntries;
-    const pollEntryVotes = req.body.votes;
-
-    if (newPollEntries) {
-      for (let i = 0; i < newPollEntries.length; i++) {
-        const pollEntry = meetingDatesPollEntryRepository.create({
-          ...newPollEntries[i],
-          meeting: meeting
-        });
-        await meetingDatesPollEntryRepository.save(pollEntry);
+      if (!previousVote && pollEntryVotes[entryId]) {
+        //create entry
         const newVote = userMeetingDatesPollEntryRepository.create({
           meetingDatesPollEntry: pollEntry,
           user: user
         });
         await userMeetingDatesPollEntryRepository.save(newVote);
+        continue;
+      }
+      if (previousVote && !pollEntryVotes[entryId]) {
+        //delete entry
+        await userMeetingDatesPollEntryRepository.remove(previousVote);
       }
     }
-
-    if (pollEntryVotes) {
-      for (let i = 0; i < pollEntryVotes.length; i++) {
-        console.log(pollEntryVotes.length);
-        const pollEntry = await meetingDatesPollEntryRepository.findOne(
-          Object.keys(pollEntryVotes[i])[0]
-        );
-        if (!pollEntry) {
-          return res.status(StatusCodes.BAD_REQUEST).send();
-        }
-        const previousVote = await userMeetingDatesPollEntryRepository
-          .createQueryBuilder('votes')
-          .where('votes.meetingDatesPollEntryId = :pollEntryId', {
-            pollEntryId: pollEntry.id
-          })
-          .andWhere('votes.userId = :userId', { userId })
-          .getOne();
-        if (!previousVote && Object.values(pollEntryVotes[i])[0]) {
-          //create entry
-          const newVote = userMeetingDatesPollEntryRepository.create({
-            meetingDatesPollEntry: pollEntry,
-            user: user
-          });
-          await userMeetingDatesPollEntryRepository.save(newVote);
-          continue;
-        }
-        if (previousVote && !Object.values(pollEntryVotes[i])[0]) {
-          //delete entry
-          await userMeetingDatesPollEntryRepository.remove(previousVote);
-        }
-      }
-    }
-
-    const updatedPolls = await meetingDatesPollEntryRepository
-      .createQueryBuilder('pollEntries')
-      .where('pollEntries.meetingId = :meetingId', { meetingId })
-      .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
-      .leftJoinAndSelect('votes.user', 'user')
-      .orderBy('pollEntries.createDate', 'ASC')
-      .getMany();
-    res.status(StatusCodes.OK).json(updatedPolls);
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    console.log(error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   }
-};
 
-interface IMeetingStatusRequest {
+  const updatedPollEntries = await meetingDatesPollEntryRepository.find({
+    where: {
+      meetingId
+    },
+    join: {
+      alias: 'pollEntry',
+      leftJoinAndSelect: {
+        votes: 'pollEntry.userMeetingDatesPollEntries',
+        user: 'votes.user'
+      }
+    },
+    order: {
+      createDate: 'ASC'
+    }
+  });
+
+  res
+    .status(StatusCodes.OK)
+    .json(updatedPollEntries.map((pollEntry) => pollEntry.toJSON()));
+});
+
+interface MeetingStatusRequest {
   status: ParticipationStatus;
 }
 
-export const setUserMeetingStatus: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingAnnouncementGetParams,
-    Record<string, any>,
-    IMeetingStatusRequest
-  >,
-  res: Response
-) => {
-  const userId = req.user.id;
+export const setUserMeetingStatus = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
+    Record<string, never>,
+    MeetingStatusRequest
+  >
+>(async (req, res) => {
+  const userId = res.locals.user.id;
   const meetingId = parseInt(req.params.id);
-  const meetingRepository = getRepository(Meeting);
-  const userRepository = getRepository(User);
   const userParticipationStatusRepository = getRepository(
     UserParticipationStatus
   );
-  try {
-    const user = await userRepository.findOne(userId);
-    const meeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
-          userId
-        }
-      )
-      .getOneOrFail();
 
-    const userParticipationStatus =
-      await userParticipationStatusRepository.findOne({
-        participant: user,
-        meeting: meeting
-      });
-
-    await userParticipationStatusRepository.save({
-      ...userParticipationStatus,
-      userParticipationStatus: req.body.status
+  const userParticipationStatus =
+    await userParticipationStatusRepository.findOne({
+      participantId: userId,
+      meetingId
     });
 
-    return res.status(StatusCodes.OK).send();
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+  await userParticipationStatusRepository.save({
+    ...userParticipationStatus,
+    userParticipationStatus: req.body.status
+  });
 
-interface IInviteUserToMeetingRequest {
+  return res.status(StatusCodes.OK).send();
+});
+
+interface InviteUserToMeetingRequest {
   userIds: number[];
 }
 
-export const inviteUserToMeeting: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingAnnouncementGetParams,
-    Record<string, any>,
-    IInviteUserToMeetingRequest
-  >,
-  res: Response
-) => {
-  const userId = req.user.id;
+interface InviteUserToMeetingResponse {
+  newParticipants: IParticipant[];
+}
+
+export const inviteUserToMeeting = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
+    InviteUserToMeetingResponse,
+    InviteUserToMeetingRequest
+  >
+>(async (req, res) => {
   const meetingId = parseInt(req.params.id);
   const meetingRepository = getRepository(Meeting);
   const userRepository = getRepository(User);
   const userParticipationStatusRepository = getRepository(
     UserParticipationStatus
   );
-  try {
-    const meeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin('meeting.creator', 'user', 'creatorId = :userId', {
-        userId
-      })
-      .getOneOrFail();
 
-    const invitedUsers = await userRepository.findByIds(req.body.userIds);
+  const meeting = await meetingRepository.findOne(meetingId);
 
-    const newInvitations: UserParticipationStatus[] = [];
-    for (let i = 0; i < invitedUsers.length; i++) {
-      const previousInvitation =
-        await userParticipationStatusRepository.findOne({
-          meeting: meeting,
-          participant: invitedUsers[i]
-        });
+  const invitedUsers = await userRepository.findByIds(req.body.userIds);
 
-      if (!previousInvitation) {
-        const invitation = userParticipationStatusRepository.create({
-          meeting: meeting,
-          participant: invitedUsers[i],
-          userParticipationStatus: ParticipationStatus.Invited
-        });
+  const newInvitations: UserParticipationStatus[] = [];
+  const newlyInvitedUsers: User[] = [];
+  for (let i = 0; i < invitedUsers.length; i++) {
+    const previousInvitation = await userParticipationStatusRepository.findOne({
+      meeting: meeting,
+      participant: invitedUsers[i]
+    });
 
-        newInvitations.push(invitation);
+    if (!previousInvitation) {
+      const invitation = userParticipationStatusRepository.create({
+        meeting: meeting,
+        participant: invitedUsers[i],
+        userParticipationStatus: ParticipationStatus.Invited
+      });
+
+      newInvitations.push(invitation);
+      newlyInvitedUsers.push(invitedUsers[i]);
+    }
+  }
+
+  await userParticipationStatusRepository.save(newInvitations);
+
+  sendMeetingInvitationMail(
+    newlyInvitedUsers,
+    meeting,
+    process.env.APP_URL + '/invitations'
+  );
+
+  return res.status(StatusCodes.OK).send({
+    newParticipants: newInvitations.map((invitation) =>
+      invitation.toParticipant()
+    )
+  });
+});
+
+export const getMeetingInvitationSelectOptions = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
+    UserSelectOptionsResponse,
+    Record<string, never>,
+    UserSelectOptionsRequestQuery
+  >
+>(async (req, res) => {
+  const meetingRepository = getRepository(Meeting);
+  const meetingId = parseInt(req.params.id);
+  const searchText = req.query.searchText || '';
+
+  const meeting = await meetingRepository.findOne(meetingId, {
+    join: {
+      alias: 'meeting',
+      leftJoinAndSelect: {
+        participants: 'meeting.participants'
       }
     }
-
-    await userParticipationStatusRepository.save(newInvitations);
-
-    const invitedUserIds = newInvitations.map(
-      (newInvitation) => newInvitation.participant.id
-    );
-
-    const newlyInvitedUsers = invitedUsers.filter((user) =>
-      invitedUserIds.includes(user.id)
-    );
-
-    sendMeetingInvitationMail(
-      newlyInvitedUsers,
-      meeting,
-      process.env.APP_URL + '/invitations'
-    );
-
-    return res.status(StatusCodes.OK).send(
-      newInvitations.map((invitation) => ({
-        userParticipationStatus: invitation.userParticipationStatus,
-        ...invitation.participant
+  });
+  const meetingParticipantIds = meeting.participants.map(
+    (participant) => participant.participantId
+  );
+  const userRepository = getRepository(User);
+  const searchWords = searchText.split(' ').map((value) => `%${value}%`);
+  const userSelectOptions = await userRepository.find({
+    select: ['id', 'name', 'lastName', 'color'],
+    where: [
+      ...searchWords.map((word) => ({
+        id: Not(In(meetingParticipantIds)),
+        name: ILike(word)
+      })),
+      ...searchWords.map((word) => ({
+        id: Not(In(meetingParticipantIds)),
+        lastName: ILike(word)
       }))
-    );
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+    ],
+    order: { createDate: 'DESC' }
+  });
+  return res.status(StatusCodes.OK).json({
+    options: userSelectOptions.map((option) => ({
+      id: option.id,
+      name: option.name,
+      lastName: option.lastName,
+      color: option.color
+    }))
+  });
+});
 
-interface IMeetingParams extends ParamsDictionary {
-  id: string;
-}
-
-export const getMeetingInvitationSelectOptions: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingParams,
-    IUserSelectOptionsResponse,
-    Record<string, never>,
-    IUserSelectOptionsRequestQuery
-  >,
-  res: Response<IUserSelectOptionsResponse>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const meetingId = parseInt(req.params.id);
-    const meetingParticipantIds = (
-      await meetingRepository
-        .createQueryBuilder('meeting')
-        .where('meeting.id = :meetingId', { meetingId })
-        .leftJoinAndSelect('meeting.participants', 'participants')
-        .leftJoinAndSelect('participants.participant', 'participant')
-        .getOne()
-    ).participants.map((participant) => participant.participant.id);
-    const userRepository = getRepository(User);
-    const searchWords = req.query.searchText
-      .split(' ')
-      .map((value) => `%${value}%`);
-    const userSelectOptions = await userRepository.find({
-      select: ['id', 'name', 'lastName', 'color'],
-      where: [
-        ...searchWords.map((word) => ({
-          id: Not(In(meetingParticipantIds)),
-          name: ILike(word)
-        })),
-        ...searchWords.map((word) => ({
-          id: Not(In(meetingParticipantIds)),
-          lastName: ILike(word)
-        }))
-      ],
-      order: { createDate: 'DESC' }
-    });
-    return res.status(StatusCodes.OK).json({
-      options: userSelectOptions.map((option) => ({
-        id: option.id,
-        name: option.name,
-        lastName: option.lastName,
-        color: option.color
-      }))
-    });
-  } catch (error) {
-    console.log(error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
-
-export const getUserInvitedMeetings: RequestHandler = async (
-  req: AuthenticatedRequest<
-    Record<string, any>,
-    UserParticipationStatus[],
-    Record<string, any>
-  >,
-  res: Response<UserParticipationStatus[]>
-) => {
-  const userId = req.user.id;
+// TODO: verify with FE to check for best response format, current seems edgy
+export const getUserInvitedMeetings = asyncHandler<
+  AuthenticatedHandler<Record<string, never>, UserParticipationStatus[]>
+>(async (req, res) => {
+  const userId = res.locals.user.id;
   const userParticipationStatusRepository = getRepository(
     UserParticipationStatus
   );
-  try {
-    const invitations = await userParticipationStatusRepository
-      .createQueryBuilder('invitations')
-      .where('invitations.participantId = :userId', { userId })
-      .andWhere('invitations.userParticipationStatus = :invitedStatus', {
-        invitedStatus: ParticipationStatus.Invited
-      })
-      .leftJoinAndSelect('invitations.meeting', 'meeting')
-      .getMany();
+  const invitations = await userParticipationStatusRepository.find({
+    where: {
+      participantId: userId,
+      userParticipationStatus: ParticipationStatus.Invited
+    },
+    join: {
+      alias: 'invitations',
+      leftJoinAndSelect: {
+        meeting: 'invitations.meeting'
+      }
+    }
+  });
 
-    return res.status(StatusCodes.OK).json(invitations);
-  } catch (error) {
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+  return res.status(StatusCodes.OK).json(invitations);
+});

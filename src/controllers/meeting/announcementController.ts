@@ -1,232 +1,151 @@
-import { RequestHandler, Response } from 'express';
-import { Query, ParamsDictionary } from 'express-serve-static-core';
-import { EntityNotFoundError, getRepository } from 'typeorm';
+import { Query } from 'express-serve-static-core';
+import { getRepository } from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
-import { AuthenticatedRequest } from '../auth/authController';
+import { MeetingRouteParams } from './meetingController';
+import { AuthenticatedHandler } from '../auth/authController';
 import Meeting from '../../entity/Meeting';
-import Announcement from '../../entity/Announcement';
+import Announcement, { IAnnouncement } from '../../entity/Announcement';
 import User from '../../entity/User';
+import { asyncHandler } from '../../utils/route-handlers';
 
 const ANNOUNCEMENTS_PAGE_SIZE = 5;
 
-interface IMeetingAnnouncementsQueryParams extends Query {
+interface MeetingAnnouncementsQuery extends Query {
   page: string;
 }
 
-interface IMeetingAnnouncementGetParams extends ParamsDictionary {
-  id: string;
+interface MeetingAnnouncementsResponse {
+  announcements: IAnnouncement[];
+  count: number;
 }
 
-type MeetingAnnouncementsResponse =
-  | {
-      announcements: Announcement[];
-      count: number;
-    }
-  | string;
-
-export const getMeetingAnnouncements: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingAnnouncementGetParams,
+export const getMeetingAnnouncements = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
     MeetingAnnouncementsResponse,
     Record<string, never>,
-    IMeetingAnnouncementsQueryParams
-  >,
-  res: Response<MeetingAnnouncementsResponse>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const announcementsRepository = getRepository(Announcement);
-    const userId = req.user.id;
-    const meetingId = parseInt(req.params.id);
-    const page = parseInt(req.query.page);
-    if (!meetingId || !page) {
-      return res.status(StatusCodes.BAD_REQUEST).send();
-    }
-    await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
-          userId
-        }
-      )
-      .getOneOrFail();
-
-    const offset = (page - 1) * ANNOUNCEMENTS_PAGE_SIZE;
-
-    const announcements = await announcementsRepository
-      .createQueryBuilder('announcement')
-      .where('announcement.meetingId = :meetingId', { meetingId })
-      .leftJoinAndSelect('announcement.user', 'user')
-      .orderBy('announcement.createDate', 'DESC')
-      .skip(offset)
-      .take(ANNOUNCEMENTS_PAGE_SIZE)
-      .getManyAndCount();
-
-    return res.status(StatusCodes.OK).json({
-      announcements: announcements[0],
-      count: announcements[1]
-    });
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+    MeetingAnnouncementsQuery
+  >
+>(async (req, res) => {
+  const announcementsRepository = getRepository(Announcement);
+  const meetingId = parseInt(req.params.id);
+  const page = parseInt(req.query.page) || 1;
+  if (!meetingId) {
+    return res.status(StatusCodes.BAD_REQUEST).send();
   }
-};
 
-interface ICreateAnnouncementRequest {
-  title: string;
-  description: string;
+  const offset = (page - 1) * ANNOUNCEMENTS_PAGE_SIZE;
+
+  const announcements = await announcementsRepository.findAndCount({
+    select: ['createDate', 'description', 'id', 'title'],
+    where: { meetingId },
+    relations: ['user'],
+    order: { createDate: 'DESC' },
+    skip: offset,
+    take: ANNOUNCEMENTS_PAGE_SIZE
+  });
+
+  return res.status(StatusCodes.OK).json({
+    announcements: announcements[0].map((announcement) =>
+      announcement.toJSON()
+    ),
+    count: announcements[1]
+  });
+});
+
+type CreateAnnouncementRequest = Pick<IAnnouncement, 'title' | 'description'>;
+
+interface CreateAnnouncementResponse {
+  createdAnnouncement: IAnnouncement;
 }
 
-type CreateAnnouncementResponse =
-  | {
-      createdAnnouncement: Pick<
-        Announcement,
-        'id' | 'title' | 'description' | 'user' | 'createDate'
-      >;
-    }
-  | string;
-
-export const createMeetingAnnouncement: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingAnnouncementGetParams,
+export const createMeetingAnnouncement = asyncHandler<
+  AuthenticatedHandler<
+    MeetingRouteParams,
     CreateAnnouncementResponse,
-    ICreateAnnouncementRequest,
-    Record<string, never>
-  >,
-  res: Response<CreateAnnouncementResponse>
-) => {
-  try {
-    const meetingRepository = getRepository(Meeting);
-    const announcementsRepository = getRepository(Announcement);
-    const userRepository = getRepository(User);
-    const userId = req.user.id;
-    const meetingId = req.params.id;
-    const { title, description } = req.body;
-    const creatorUser = await userRepository.findOne(userId);
-    const meeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
-          userId
-        }
-      )
-      .getOneOrFail();
-    const newAnnouncement = announcementsRepository.create({
-      title,
-      description,
-      user: creatorUser,
-      meeting
-    });
-    await announcementsRepository.save(newAnnouncement);
-    return res.status(StatusCodes.CREATED).json({
-      createdAnnouncement: {
-        id: newAnnouncement.id,
-        title: newAnnouncement.title,
-        description: newAnnouncement.description,
-        user: newAnnouncement.user,
-        createDate: newAnnouncement.createDate
-      }
-    });
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
-};
+    CreateAnnouncementRequest
+  >
+>(async (req, res) => {
+  const announcementsRepository = getRepository(Announcement);
+  const userRepository = getRepository(User);
+  const userId = res.locals.user.id;
+  const meetingId = parseInt(req.params.id);
+  const { title, description } = req.body;
+  const creatorUser = await userRepository.findOne(userId);
 
-interface IMeetingAnnouncementEditParams extends ParamsDictionary {
-  meetingId: string;
+  const newAnnouncement = announcementsRepository.create({
+    title,
+    description,
+    user: creatorUser,
+    meetingId
+  });
+  await announcementsRepository.save(newAnnouncement);
+  return res.status(StatusCodes.CREATED).json({
+    createdAnnouncement: newAnnouncement.toJSON()
+  });
+});
+
+interface MeetingAnnouncementRouteParams extends MeetingRouteParams {
   announcementId: string;
 }
 
-export const editMeetingAnnouncement: RequestHandler = async (
-  req: AuthenticatedRequest<
-    IMeetingAnnouncementEditParams,
-    Announcement,
-    ICreateAnnouncementRequest,
-    Record<string, never>
-  >,
-  res: Response<Announcement>
-) => {
+type EditAnnouncementRequest = Partial<CreateAnnouncementRequest>;
+
+export const editMeetingAnnouncement: AuthenticatedHandler<
+  MeetingAnnouncementRouteParams,
+  IAnnouncement,
+  EditAnnouncementRequest
+> = async (req, res) => {
   const announcementRepository = getRepository(Announcement);
-  const userId = req.user.id;
+  const userId = res.locals.user.id;
   const announcementId = parseInt(req.params.announcementId);
-
-  try {
-    const announcement = await announcementRepository
-      .createQueryBuilder('announcement')
-      .where('announcement.id = :announcementId', { announcementId })
-      .innerJoinAndSelect('announcement.user', 'user', 'user.id = :userId', {
-        userId
-      })
-      .getOneOrFail();
-
-    const result = await announcementRepository.save({
-      ...announcement,
-      ...req.body
-    });
-    return res.status(StatusCodes.OK).json(result);
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
+  const announcement = await announcementRepository.findOneOrFail(
+    announcementId,
+    {
+      select: ['createDate', 'description', 'id', 'title'],
+      join: {
+        alias: 'announcement',
+        innerJoinAndSelect: {
+          user: 'announcement.user'
+        }
+      },
+      where: {
+        user: {
+          id: userId
+        }
+      }
     }
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
-  }
+  );
+  const updatedAnnouncement = announcementRepository.merge(
+    announcement,
+    req.body
+  );
+  await announcementRepository.save(updatedAnnouncement);
+  return res.status(StatusCodes.OK).json(updatedAnnouncement.toJSON());
 };
 
-export const deleteMeetingAnnouncement: RequestHandler = async (
-  req: AuthenticatedRequest<IMeetingAnnouncementEditParams>,
-  res: Response
-) => {
+export const deleteMeetingAnnouncement = asyncHandler<
+  AuthenticatedHandler<MeetingAnnouncementRouteParams>
+>(async (req, res) => {
   const announcementRepository = getRepository(Announcement);
   const meetingRepository = getRepository(Meeting);
-  const userId = req.user.id;
+  const userId = res.locals.user.id;
 
-  const meetingId = parseInt(req.params.meetingId);
+  const meetingId = parseInt(req.params.id);
   const announcementId = parseInt(req.params.announcementId);
 
-  try {
-    const meeting = await meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :meetingId', { meetingId })
-      .innerJoin(
-        'meeting.participants',
-        'user',
-        'user.participantId = :userId',
-        {
-          userId
-        }
-      )
-      .leftJoinAndSelect('meeting.creator', 'creator')
-      .getOneOrFail();
+  const meeting = await meetingRepository.findOne(meetingId, {
+    relations: ['creator']
+  });
 
-    const announcement = await announcementRepository
-      .createQueryBuilder('announcement')
-      .where('announcement.id = :announcementId', { announcementId })
-      .leftJoinAndSelect('announcement.user', 'user')
-      .getOneOrFail();
+  const announcement = await announcementRepository.findOneOrFail(
+    announcementId,
+    { relations: ['user'] }
+  );
 
-    if (announcement.user.id === userId || meeting.creator.id === userId) {
-      await announcementRepository.softRemove(announcement);
-      return res.status(StatusCodes.NO_CONTENT).send();
-    }
-    return res.status(StatusCodes.FORBIDDEN).send();
-  } catch (error) {
-    if (error instanceof EntityNotFoundError) {
-      return res.status(StatusCodes.NOT_FOUND).send();
-    }
-    console.log(error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  if (announcement.user.id === userId || meeting.creator.id === userId) {
+    await announcementRepository.softRemove(announcement);
+    return res.status(StatusCodes.NO_CONTENT).send();
   }
-};
+  return res.status(StatusCodes.FORBIDDEN).send();
+});
