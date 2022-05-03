@@ -96,9 +96,12 @@ export const editMeetingExpense = asyncHandler<
   const updatedExpense = expenseRepository.merge(expense, {
     ...(name !== undefined ? { name } : {}),
     ...(description !== undefined ? { description } : {}),
-    ...(amount !== undefined ? { amount } : {}),
-    ...(users !== undefined ? { users } : {})
+    ...(amount !== undefined ? { amount } : {})
   });
+
+  if (users) {
+    updatedExpense.users = users;
+  }
 
   await expenseRepository.save(updatedExpense);
   return res.status(StatusCodes.OK).json(updatedExpense.toJSON());
