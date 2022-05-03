@@ -98,7 +98,7 @@ const getBaseMeetingsQueryBuilder = (
       userId
     })
     .where('meeting.status IN (:...meetingStatuses)', {
-      meetingStatuses: meetingStatuses
+      meetingStatuses: meetingStatuses.map((status) => status.toString())
     })
     .orderBy('meeting.startDate', 'ASC')
     .leftJoinAndSelect('meeting.creator', 'creator')

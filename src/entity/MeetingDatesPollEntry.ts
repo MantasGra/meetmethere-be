@@ -38,7 +38,7 @@ class MeetingDatesPollEntry extends BaseEntity {
       startDate: this.startDate,
       endDate: this.endDate,
       users:
-        this?.userMeetingDatesPollEntries.map((userEntry) => userEntry.user) ||
+        this?.userMeetingDatesPollEntries?.map((userEntry) => userEntry.user) ||
         []
     };
   }
