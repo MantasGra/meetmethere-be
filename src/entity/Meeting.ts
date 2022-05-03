@@ -103,8 +103,8 @@ class Meeting extends BaseEntity {
         this.meetingDatesPollEntries
           ?.sort((entry, otherEntry) => {
             if (
-              entry.userMeetingDatesPollEntries.length ===
-              otherEntry.userMeetingDatesPollEntries.length
+              entry.userMeetingDatesPollEntries?.length ===
+              otherEntry.userMeetingDatesPollEntries?.length
             ) {
               return (
                 new Date(entry.startDate).getTime() -
@@ -112,8 +112,8 @@ class Meeting extends BaseEntity {
               );
             }
             return (
-              otherEntry.userMeetingDatesPollEntries.length -
-              entry.userMeetingDatesPollEntries.length
+              otherEntry.userMeetingDatesPollEntries?.length -
+              entry.userMeetingDatesPollEntries?.length
             );
           })
           .map((entry) => entry.toJSON()) || []

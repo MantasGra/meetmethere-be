@@ -1,5 +1,12 @@
 import { ParamsDictionary, Query } from 'express-serve-static-core';
-import { ILike, In, Not, getRepository } from 'typeorm';
+import {
+  ILike,
+  In,
+  Not,
+  getRepository,
+  Repository,
+  SelectQueryBuilder
+} from 'typeorm';
 import { StatusCodes } from 'http-status-codes';
 import { AuthenticatedHandler } from '../auth/authController';
 import Meeting, { MeetingStatus, IMeeting } from '../../entity/Meeting';
@@ -73,6 +80,34 @@ interface UserMeetingsQueryParams extends Query {
   typeOfMeeting: '' | 'planned' | 'archived';
 }
 
+const getBaseMeetingsQueryBuilder = (
+  repository: Repository<Meeting>,
+  userId: number,
+  participationStatuses: Array<ParticipationStatus>,
+  meetingStatuses: Array<MeetingStatus>
+): SelectQueryBuilder<Meeting> =>
+  repository
+    .createQueryBuilder('meeting')
+    .innerJoin(
+      'meeting.participants',
+      'participants',
+      'participants.userParticipationStatus IN (:...statuses)',
+      { statuses: participationStatuses }
+    )
+    .innerJoin('participants.participant', 'user', 'user.id = :userId', {
+      userId
+    })
+    .where('meeting.status IN (:...meetingStatuses)', {
+      meetingStatuses: meetingStatuses
+    })
+    .orderBy('meeting.startDate', 'ASC')
+    .leftJoinAndSelect('meeting.creator', 'creator')
+    .leftJoinAndSelect('meeting.participants', 'participants2')
+    .leftJoinAndSelect('participants2.participant', 'participant')
+    .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
+    .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
+    .leftJoinAndSelect('votes.user', 'votedUser');
+
 export const getUserMeetings = asyncHandler<
   AuthenticatedHandler<
     MeetingRouteParams,
@@ -98,22 +133,12 @@ export const getUserMeetings = asyncHandler<
   // This query builder is required here as usual find options
   // are unable to apply conditions on joins and this join is important
   // to filter out only meetings where current user participates
-  const userParticipatedMeetings = await meetingRepository
-    .createQueryBuilder('meeting')
-    .leftJoin('meeting.participants', 'participants')
-    .innerJoin('participants.participant', 'user', 'user.id = :userId', {
-      userId
-    })
-    .where('meeting.status IN (:...meetingStatuses)', {
-      meetingStatuses: meetingStatuses
-    })
-    .orderBy('meeting.startDate', 'ASC')
-    .leftJoinAndSelect('meeting.creator', 'creator')
-    .leftJoinAndSelect('meeting.participants', 'participants2')
-    .leftJoinAndSelect('participants2.participant', 'participant')
-    .leftJoinAndSelect('meeting.meetingDatesPollEntries', 'pollEntries')
-    .leftJoinAndSelect('pollEntries.userMeetingDatesPollEntries', 'votes')
-    .leftJoinAndSelect('votes.user', 'votedUser')
+  const userParticipatedMeetings = await getBaseMeetingsQueryBuilder(
+    meetingRepository,
+    userId,
+    [ParticipationStatus.Going, ParticipationStatus.Maybe],
+    meetingStatuses
+  )
     .skip(offset)
     .take(MEETINGS_PAGE_SIZE)
     .getManyAndCount();
@@ -303,7 +328,9 @@ export const updateMeeting = asyncHandler<
         creator: 'meeting.creator',
         participants: 'meeting.participants',
         participant: 'participants.participant',
-        pollEntries: 'meeting.meetingDatesPollEntries'
+        pollEntries: 'meeting.meetingDatesPollEntries',
+        votes: 'pollEntries.userMeetingDatesPollEntries',
+        votedUser: 'votes.user'
       }
     }
   });
@@ -572,26 +599,28 @@ export const getMeetingInvitationSelectOptions = asyncHandler<
   });
 });
 
-// TODO: verify with FE to check for best response format, current seems edgy
+interface InvitationsResponse {
+  invitations: IMeeting[];
+}
+
 export const getUserInvitedMeetings = asyncHandler<
-  AuthenticatedHandler<Record<string, never>, UserParticipationStatus[]>
+  AuthenticatedHandler<Record<string, never>, InvitationsResponse>
 >(async (req, res) => {
   const userId = res.locals.user.id;
-  const userParticipationStatusRepository = getRepository(
-    UserParticipationStatus
-  );
-  const invitations = await userParticipationStatusRepository.find({
-    where: {
-      participantId: userId,
-      userParticipationStatus: ParticipationStatus.Invited
-    },
-    join: {
-      alias: 'invitations',
-      leftJoinAndSelect: {
-        meeting: 'invitations.meeting'
-      }
-    }
-  });
+  const meetingRepository = getRepository(Meeting);
+  const invitations = await getBaseMeetingsQueryBuilder(
+    meetingRepository,
+    userId,
+    [ParticipationStatus.Invited, ParticipationStatus.Declined],
+    [
+      MeetingStatus.Extended,
+      MeetingStatus.Planned,
+      MeetingStatus.Postponed,
+      MeetingStatus.Started
+    ]
+  ).getMany();
 
-  return res.status(StatusCodes.OK).json(invitations);
+  return res.status(StatusCodes.OK).json({
+    invitations: invitations.map((invitation) => invitation.toJSON())
+  });
 });
