@@ -9,6 +9,7 @@ import User from '../../entity/User';
 import Token, { TokenContents } from '../../entity/Token';
 import { verifyPassword } from '../../utils/hashPassword';
 import { asyncHandler } from '../../utils/route-handlers';
+import { sendPasswordResetMail } from '../../services/mailer';
 
 export interface IRegisterRequest {
   name: string;
@@ -199,3 +200,95 @@ export const authenticateRequest: AuthenticatedHandler = (req, res, next) => {
     res.status(StatusCodes.UNAUTHORIZED).send();
   }
 };
+
+interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
+export const changePassword = asyncHandler<
+  AuthenticatedHandler<Record<string, never>, string, ChangePasswordRequest>
+>(async (req, res) => {
+  const userId = res.locals.user.id;
+  const { oldPassword, newPassword } = req.body;
+
+  const userRepository = getRepository(User);
+  try {
+    const user = await userRepository.findOneOrFail(userId, {
+      select: ['id', 'password']
+    });
+
+    const passwordMatches = await verifyPassword(oldPassword, user.password);
+
+    if (!passwordMatches) {
+      return res.status(StatusCodes.UNAUTHORIZED).send('Invalid credentials.');
+    }
+
+    await user.setPassword(newPassword);
+    await userRepository.save(user);
+
+    return res.status(StatusCodes.OK).send();
+  } catch (error) {
+    if (error instanceof EntityNotFoundError) {
+      return res.status(StatusCodes.UNAUTHORIZED).send('Invalid credentials.');
+    }
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
+  }
+});
+
+interface RequestPassworResetRequest {
+  email: string;
+}
+
+export const requestPasswordReset = asyncHandler<
+  RequestHandler<
+    Record<string, never>,
+    Record<string, never>,
+    RequestPassworResetRequest
+  >
+>(async (req, res) => {
+  const { email } = req.body;
+
+  const userRespository = getRepository(User);
+  const user = await userRespository.findOne({ email });
+  if (!user) {
+    return res.status(StatusCodes.OK).send();
+  }
+
+  user.generatePasswordResetToken();
+  await userRespository.save(user);
+
+  const resetLink = `${process.env.APP_URL}/resetpassword#${user.passwordResetToken}`;
+  sendPasswordResetMail(email, resetLink);
+
+  return res.status(StatusCodes.OK).send();
+});
+
+interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
+export const resetPassword = asyncHandler<
+  RequestHandler<
+    Record<string, never>,
+    Record<string, never>,
+    ResetPasswordRequest
+  >
+>(async (req, res) => {
+  const { token, password } = req.body;
+
+  const userRepository = getRepository(User);
+  if (!token) {
+    return res.status(StatusCodes.BAD_REQUEST).send();
+  }
+  const user = await userRepository.findOneOrFail({
+    passwordResetToken: token
+  });
+
+  await user.setPassword(password);
+  user.passwordResetToken = null;
+  await userRepository.save(user);
+
+  return res.status(StatusCodes.OK).send();
+});

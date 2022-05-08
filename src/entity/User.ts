@@ -1,4 +1,5 @@
 import { BeforeInsert, Column, Entity, ManyToMany, OneToMany } from 'typeorm';
+import randToken from 'rand-token';
 import BaseEntity from './base/BaseEntity';
 import Meeting from './Meeting';
 import { hashPassword } from '../utils/hashPassword';
@@ -49,6 +50,13 @@ class User extends BaseEntity {
   })
   color: UserColors;
 
+  @Column({
+    select: false,
+    length: 16,
+    nullable: true
+  })
+  passwordResetToken: string | null;
+
   @OneToMany(
     () => UserParticipationStatus,
     (participation) => participation.participant
@@ -68,6 +76,10 @@ class User extends BaseEntity {
     this.password = await hashPassword(this.password);
   }
 
+  async setPassword(password: string): Promise<void> {
+    this.password = await hashPassword(password);
+  }
+
   @ManyToMany(() => Expense, (expense) => expense.users)
   expenses: Expense[];
 
@@ -79,6 +91,10 @@ class User extends BaseEntity {
     (userMeetingDatesPollEntry) => userMeetingDatesPollEntry.user
   )
   userMeetingDatesPollEntries: UserMeetingDatesPollEntry[];
+
+  generatePasswordResetToken(): void {
+    this.passwordResetToken = randToken.generate(16);
+  }
 }
 
 export default User;
