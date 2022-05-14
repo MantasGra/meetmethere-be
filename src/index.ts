@@ -31,7 +31,10 @@ async function main() {
   if (process.env.ENVIRONMENT !== 'TEST') {
     app.use(
       csurf({
-        cookie: true
+        cookie:
+          process.env.ENVIRONMENT === 'PROD'
+            ? { secure: true, sameSite: 'none' }
+            : true
       })
     );
     app.get('/csrf', (req, res) => res.send({ csrfToken: req.csrfToken() }));
