@@ -1,6 +1,7 @@
 import User from '../entity/User';
 import sgMail from '@sendgrid/mail';
 import Meeting from '../entity/Meeting';
+import util from 'util';
 
 export const sendMeetingInvitationMail = (
   participants: User[],
@@ -54,12 +55,17 @@ export const sendPasswordResetMail = (
     `
   };
 
-  sgMail.sendMultiple(mail).then(
-    () => {
-      console.log('Sent email');
-    },
-    (err) => {
-      console.error(err);
-    }
-  );
+  sgMail
+    .sendMultiple(mail)
+    .then(
+      () => {
+        console.log('Sent email');
+      },
+      (err) => {
+        console.log(util.inspect(err, false, null, true /* enable colors */));
+      }
+    )
+    .catch((err) =>
+      console.log(util.inspect(err, false, null, true /* enable colors */))
+    );
 };
